@@ -264,6 +264,62 @@ class EmbeddingCache(Base):
 # Stage 4.2 models (function cascade) go below this line.
 
 
+class CascadeGroup(Base):
+    """An object of level N with its direct executors and the function records compared (stage 4.2)."""
+
+    __tablename__ = "cascade_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    entity_id: Mapped[int] = mapped_column(Integer)
+    child_entity_ids: Mapped[str] = mapped_column(Text)
+    parent_record_ids: Mapped[str] = mapped_column(Text)
+    child_record_ids: Mapped[str] = mapped_column(Text)
+    uncertain_entity_ids: Mapped[str] = mapped_column(Text, default="[]")
+
+
+class CascadeLink(Base):
+    """The best parent candidate of one child function and the decision on it."""
+
+    __tablename__ = "cascade_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    group_id: Mapped[int] = mapped_column(Integer)
+    child_entity_id: Mapped[int] = mapped_column(Integer)
+    child_record_id: Mapped[int] = mapped_column(Integer)
+    parent_record_id: Mapped[int | None] = mapped_column(Integer)
+    # The float annotation maps to REAL; no column type import needed.
+    best_similarity: Mapped[float | None] = mapped_column()
+    decision: Mapped[str] = mapped_column(Text)
+    verdict: Mapped[str | None] = mapped_column(Text)
+    explanation: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    tied_record_ids: Mapped[str] = mapped_column(Text, default="[]")
+    embedding_model: Mapped[str] = mapped_column(Text)
+    metric: Mapped[str] = mapped_column(Text)
+    text_format: Mapped[str] = mapped_column(Text)
+
+
+class CascadeFinding(Base):
+    """A cascade sign for review: parent without children, child without parent, or a link to clarify."""
+
+    __tablename__ = "cascade_findings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(Text)
+    final: Mapped[int] = mapped_column(Integer)
+    record_id: Mapped[int] = mapped_column(Integer)
+    entity_id: Mapped[int] = mapped_column(Integer)
+    group_id: Mapped[int | None] = mapped_column(Integer)
+    link_id: Mapped[int | None] = mapped_column(Integer)
+    message: Mapped[str] = mapped_column(Text)
+
+
 def create_schema(engine: Engine) -> None:
     """Create all tables on a new database.
 

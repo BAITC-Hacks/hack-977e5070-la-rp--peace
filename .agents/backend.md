@@ -242,6 +242,52 @@ other participants with names, sources `{node_id, path, location, quote, start, 
 `GET /api/documents/{id}/activity-report` (status, record count, block marks, issues),
 `POST /api/documents/{id}/activities` → 202, re-runs stage 3 and later stages (503 without a model).
 
+### 9. Function cascade (4.2) — **done**
+
+`src/la_rp_peace/cascade/`: `CascadeStage` (`name = "cascade"`) is the last post-parse stage
+(after activities); it needs the chat model and an `Embedder` (`OpenAIEmbedder`,
+`OPENAI_EMBEDDING_MODEL`, left out without `OPENAI_API_KEY`). It reads stage 2 entities and
+stage 3 records **from the database only** and runs when `entities_status` and
+`activities_status` are `done`/`needs_review`; otherwise `cascade_status` stays `not_started`
+(stale 4.2 rows removed). `running` is committed first; a crash ⇒ `failed` (previous rows kept).
+
+1. `groups.py` — a group = entity N + its direct children (`parent_status = resolved`,
+   `parent_id = N`); parent functions = N's `task`/`function`/`duty` records, child functions =
+   the children's. Records with `entity_id` NULL belong to no group (listed in the report).
+   Functions of entities with an `unknown`/`ambiguous` parent ⇒ `needs_clarification` findings,
+   never «no pair»; an entity ambiguous between N and others marks N's group incomplete.
+2. `matching.py` — `activity_text` (`activity-v1`) embeddings, cached; cosine of every child
+   function with ALL parent functions of its group, raw maximum (no rounding). Exact tie at the
+   top ⇒ `ambiguous` with all tied ids, no LLM. `> 0.85` ⇒ auto; `> 0.50 and <= 0.85` ⇒ one
+   question; `<= 0.50` / no candidates ⇒ no pair. Never falls back to the second best.
+3. `links.py` + `prompt.py` — `verification.ask_in_batches` (10 per request): question id
+   `q<child_record_id>`, both records with entity, type, formulation, conditions, participation,
+   specificity, the similarity and verbatim stage 3 quotes with node ids/paths. Answer
+   `{"answers":[{"question_id","verdict":"confirmed|rejected","explanation"?}]}`; nothing else is
+   accepted. No valid answer ⇒ link `error`; not asked ⇒ `pending`; neither is a rejection.
+4. `findings.py` — one set of links, two checks. Child without accepted parent ⇒ «Основание не
+   найдено» (`not_found`/`not_confirmed` final; `ambiguous`/`pending`/`error`/`no_parent_functions`
+   not final). Parent function of a group without accepted child ⇒ «Исполнитель не найден»
+   (`no_accepted_child` final; `pending` while an unresolved link could still attach a child,
+   `group_incomplete`, `no_child_functions` not final). Top objects need no parent, leaves need no
+   children. **Not detected in v1:** the §6 exemption «действие закреплено лично за текущим
+   уровнем» — such functions appear as «Исполнитель не найден» with a «требует проверки» note.
+5. `store.py` — one transaction replaces all 4.2 rows of the document. Status `needs_review` when
+   any finding exists, else `done`.
+
+Tables: `cascade_groups` (entity, child entity ids, parent/child record ids, uncertain entity ids),
+`cascade_links` (one per child function: best candidate, raw `best_similarity`, `decision
+auto|llm|none`, `verdict`, `explanation`, `status accepted|not_found|not_confirmed|ambiguous|
+pending|error`, `error`, `attempts`, `tied_record_ids`, `embedding_model`, `metric`,
+`text_format`), `cascade_findings` (`kind`, `reason`, `final`, record, entity, group, link,
+message); composite `(document_id, …)` keys keep everything in one document.
+
+Endpoints: `GET /api/documents/{id}/cascade` (groups with entities, functions + sources, links;
+chains «задача → функция → действие» from accepted links; findings with label, entity and record),
+`GET /api/documents/{id}/cascade-report` (counts by decision/verdict/status/kind/reason, final
+anomalies, excluded record ids), `POST /api/documents/{id}/cascade` → 202, re-runs stage 4.2
+(503 without a model or embedder).
+
 ## Not doing
 
 Auth, multi-tenancy, migrations, OCR, background workers outside the API process,

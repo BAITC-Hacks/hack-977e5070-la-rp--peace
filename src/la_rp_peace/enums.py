@@ -195,3 +195,53 @@ class AnalysisStatus(StrEnum):
 
 
 # Stage 4.2 enums (function cascade) go below this line.
+
+
+class CascadeDecision(StrEnum):
+    """How a child function's link was decided: above 0.85, by the LLM, or no question asked."""
+
+    AUTO = "auto"
+    LLM = "llm"
+    NONE = "none"
+
+
+class CascadeVerdict(StrEnum):
+    """The LLM's verdict on the one proposed parent of a child function."""
+
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+
+
+class CascadeLinkStatus(StrEnum):
+    """Outcome for one child function; only ``accepted`` gives it a parent."""
+
+    ACCEPTED = "accepted"
+    NOT_FOUND = "not_found"
+    NOT_CONFIRMED = "not_confirmed"
+    AMBIGUOUS = "ambiguous"
+    PENDING = "pending"
+    ERROR = "error"
+
+
+class CascadeFindingKind(StrEnum):
+    """What a cascade finding is about."""
+
+    PARENT_WITHOUT_CHILDREN = "parent_without_children"
+    CHILD_WITHOUT_PARENT = "child_without_parent"
+    NEEDS_CLARIFICATION = "needs_clarification"
+
+
+class CascadeFindingReason(StrEnum):
+    """Why a finding was raised; only some reasons make it a final anomaly."""
+
+    NOT_FOUND = "not_found"
+    NOT_CONFIRMED = "not_confirmed"
+    AMBIGUOUS = "ambiguous"
+    ERROR = "error"
+    NO_ACCEPTED_CHILD = "no_accepted_child"
+    PENDING = "pending"
+    GROUP_INCOMPLETE = "group_incomplete"
+    NO_PARENT_FUNCTIONS = "no_parent_functions"
+    NO_CHILD_FUNCTIONS = "no_child_functions"
+    PARENT_UNKNOWN = "parent_unknown"
+    PARENT_AMBIGUOUS = "parent_ambiguous"

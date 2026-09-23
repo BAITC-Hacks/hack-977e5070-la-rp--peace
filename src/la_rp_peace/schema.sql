@@ -381,4 +381,108 @@ CREATE TABLE embedding_cache (
 
 -- Stage 4.2 tables (function cascade) go below this line.
 
+-- Stage 4.2 (methodology/04_2_function_cascade.md): an organisational object of level N and its
+-- direct executors N+1 (children with parent_status = 'resolved'), with the task/function/duty
+-- records compared inside the group. A re-run replaces all 4.2 rows of the document.
+CREATE TABLE cascade_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    entity_id INTEGER NOT NULL,
+    -- JSON arrays of ids of this document: the children, the records of both sides, and the
+    -- entities whose parent is ambiguous with this entity among the candidates (group incomplete).
+    child_entity_ids TEXT NOT NULL CHECK (
+        CASE WHEN json_valid(child_entity_ids) THEN json_type(child_entity_ids) = 'array' ELSE 0 END
+    ),
+    parent_record_ids TEXT NOT NULL CHECK (
+        CASE WHEN json_valid(parent_record_ids) THEN json_type(parent_record_ids) = 'array' ELSE 0 END
+    ),
+    child_record_ids TEXT NOT NULL CHECK (
+        CASE WHEN json_valid(child_record_ids) THEN json_type(child_record_ids) = 'array' ELSE 0 END
+    ),
+    uncertain_entity_ids TEXT NOT NULL DEFAULT '[]' CHECK (
+        CASE WHEN json_valid(uncertain_entity_ids) THEN json_type(uncertain_entity_ids) = 'array' ELSE 0 END
+    ),
+    CONSTRAINT cascade_groups_document_identity UNIQUE (document_id, id),
+    CONSTRAINT cascade_groups_one_per_entity UNIQUE (document_id, entity_id),
+    CONSTRAINT cascade_groups_entity_same_document
+        FOREIGN KEY (document_id, entity_id) REFERENCES entities (document_id, id) ON DELETE CASCADE
+) STRICT;
+
+-- The decision for ONE child function: its best parent candidate by embedding similarity and what
+-- became of it. A child function has at most one link (one parent); a parent may have many.
+CREATE TABLE cascade_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    group_id INTEGER NOT NULL,
+    child_entity_id INTEGER NOT NULL,
+    child_record_id INTEGER NOT NULL,
+    -- The single best candidate; NULL without candidates or on a tie (see tied_record_ids).
+    parent_record_id INTEGER,
+    -- Raw cosine of the best candidate, never rounded; NULL without candidates.
+    best_similarity REAL,
+    decision TEXT NOT NULL CHECK (decision IN ('auto', 'llm', 'none')),
+    verdict TEXT CHECK (verdict IS NULL OR verdict IN ('confirmed', 'rejected')),
+    explanation TEXT,
+    -- pending = the question was not asked yet; error = asked without a valid answer. Neither is a rejection.
+    status TEXT NOT NULL CHECK (
+        status IN ('accepted', 'not_found', 'not_confirmed', 'ambiguous', 'pending', 'error')
+    ),
+    -- Why the verification gave no verdict (not asked, model error, no valid answer).
+    error TEXT CHECK (error IS NULL OR trim(error) <> ''),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    -- JSON array of all record ids sharing the maximal score when there is an exact tie.
+    tied_record_ids TEXT NOT NULL DEFAULT '[]' CHECK (
+        CASE WHEN json_valid(tied_record_ids) THEN json_type(tied_record_ids) = 'array' ELSE 0 END
+    ),
+    -- The thresholds only hold for this model, metric and text format.
+    embedding_model TEXT NOT NULL CHECK (trim(embedding_model) <> ''),
+    metric TEXT NOT NULL CHECK (trim(metric) <> ''),
+    text_format TEXT NOT NULL CHECK (trim(text_format) <> ''),
+    CONSTRAINT cascade_links_document_identity UNIQUE (document_id, id),
+    CONSTRAINT cascade_links_one_per_child UNIQUE (document_id, child_record_id),
+    CONSTRAINT cascade_links_not_own_parent CHECK (parent_record_id IS NOT child_record_id),
+    CONSTRAINT cascade_links_accepted_has_parent CHECK (
+        status <> 'accepted' OR (parent_record_id IS NOT NULL AND (decision = 'auto' OR verdict = 'confirmed'))
+    ),
+    CONSTRAINT cascade_links_verdict_only_from_llm CHECK (verdict IS NULL OR decision = 'llm'),
+    CONSTRAINT cascade_links_group_same_document
+        FOREIGN KEY (document_id, group_id) REFERENCES cascade_groups (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT cascade_links_child_entity_same_document
+        FOREIGN KEY (document_id, child_entity_id) REFERENCES entities (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT cascade_links_child_same_document
+        FOREIGN KEY (document_id, child_record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT cascade_links_parent_same_document
+        FOREIGN KEY (document_id, parent_record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE
+) STRICT;
+
+-- Signs for review: «Исполнитель не найден» (parent_without_children), «Основание не найдено»
+-- (child_without_parent), or an organisational link to clarify. final = 0 while pending
+-- verification, ties or incomplete input could still change the result.
+CREATE TABLE cascade_findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('parent_without_children', 'child_without_parent', 'needs_clarification')),
+    reason TEXT NOT NULL CHECK (reason IN (
+        'not_found', 'not_confirmed', 'ambiguous', 'error', 'no_accepted_child', 'pending',
+        'group_incomplete', 'no_parent_functions', 'no_child_functions', 'parent_unknown', 'parent_ambiguous'
+    )),
+    final INTEGER NOT NULL CHECK (final IN (0, 1)),
+    record_id INTEGER NOT NULL,
+    entity_id INTEGER NOT NULL,
+    -- The checked group (its composition is stored there); NULL for needs_clarification.
+    group_id INTEGER,
+    link_id INTEGER,
+    message TEXT NOT NULL CHECK (trim(message) <> ''),
+    CONSTRAINT cascade_findings_document_identity UNIQUE (document_id, id),
+    CONSTRAINT cascade_findings_group_required CHECK ((group_id IS NULL) = (kind = 'needs_clarification')),
+    CONSTRAINT cascade_findings_record_same_document
+        FOREIGN KEY (document_id, record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT cascade_findings_entity_same_document
+        FOREIGN KEY (document_id, entity_id) REFERENCES entities (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT cascade_findings_group_same_document
+        FOREIGN KEY (document_id, group_id) REFERENCES cascade_groups (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT cascade_findings_link_same_document
+        FOREIGN KEY (document_id, link_id) REFERENCES cascade_links (document_id, id) ON DELETE CASCADE
+) STRICT;
+
 COMMIT;
