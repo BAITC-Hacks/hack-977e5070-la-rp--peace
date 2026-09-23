@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from la_rp_peace.ingestion.prompt import Message
+from la_rp_peace.llm import Message
 
 TEST_DATA = Path(__file__).resolve().parent.parent / "test_data"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "profiles"

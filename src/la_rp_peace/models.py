@@ -51,6 +51,7 @@ class Document(Base):
     parse_status: Mapped[str] = mapped_column(Text, default="pending")
     uploaded_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
     doc_set: Mapped[str | None] = mapped_column(Text)
+    entities_status: Mapped[str] = mapped_column(Text, default="not_started")
 
 
 class DocumentFile(Base):
@@ -91,6 +92,82 @@ class ParsingIssue(Base):
     issue_type: Mapped[str] = mapped_column(Text)
     message: Mapped[str] = mapped_column(Text)
     is_blocking: Mapped[int] = mapped_column(Integer, default=1)
+    resolved_at: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
+
+
+class Entity(Base):
+    """An organisational object of one document (stage 2)."""
+
+    __tablename__ = "entities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    parent_id: Mapped[int | None] = mapped_column(Integer)
+    parent_status: Mapped[str] = mapped_column(Text)
+    name: Mapped[str] = mapped_column(Text)
+    aliases: Mapped[str] = mapped_column(Text, default="[]")
+    entity_type: Mapped[str] = mapped_column(Text)
+    position_type: Mapped[str | None] = mapped_column(Text)
+    level: Mapped[str | None] = mapped_column(Text)
+    roles: Mapped[str] = mapped_column(Text, default="[]")
+    review_status: Mapped[str] = mapped_column(Text, default="pending")
+
+
+class EntityRelation(Base):
+    """A relation between two entities other than organisational membership."""
+
+    __tablename__ = "entity_relations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    from_entity_id: Mapped[int] = mapped_column(Integer)
+    to_entity_id: Mapped[int] = mapped_column(Integer)
+    relation_type: Mapped[str] = mapped_column(Text)
+    conditions: Mapped[str | None] = mapped_column(Text)
+
+
+class EntitySource(Base):
+    """A verbatim quote from a node that supports an entity or relation claim."""
+
+    __tablename__ = "entity_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    entity_id: Mapped[int | None] = mapped_column(Integer)
+    relation_id: Mapped[int | None] = mapped_column(Integer)
+    node_id: Mapped[int] = mapped_column(Integer)
+    quote: Mapped[str] = mapped_column(Text)
+    quote_start: Mapped[int] = mapped_column(Integer)
+    quote_end: Mapped[int] = mapped_column(Integer)
+    supports: Mapped[str] = mapped_column(Text)
+
+
+class EntityBlock(Base):
+    """Processing mark of one block sent to the model."""
+
+    __tablename__ = "entity_blocks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    node_id: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(Text)
+    message: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer)
+
+
+class EntityIssue(Base):
+    """A stage 2 problem, optionally tied to an entity or relation."""
+
+    __tablename__ = "entity_issues"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    entity_id: Mapped[int | None] = mapped_column(Integer)
+    relation_id: Mapped[int | None] = mapped_column(Integer)
+    issue_type: Mapped[str] = mapped_column(Text)
+    message: Mapped[str] = mapped_column(Text)
+    is_blocking: Mapped[int] = mapped_column(Integer, default=0)
     resolved_at: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
 

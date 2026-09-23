@@ -9,8 +9,7 @@ from la_rp_peace.enums import DocFormat, IssueType, ParseStatus
 from la_rp_peace.ingestion.analysis import analyse
 from la_rp_peace.ingestion.extract import detect_format, extract
 from la_rp_peace.ingestion.extract.types import Extraction, TextBuilder
-from la_rp_peace.ingestion.profiler import ProfilerError
-from la_rp_peace.ingestion.prompt import Message
+from la_rp_peace.llm import ChatModelError, Message
 
 ED9 = edition_path(9)
 EXTRACTION = extract(detect_format(ED9.name, ED9.read_bytes()), ED9.read_bytes())
@@ -69,9 +68,9 @@ def test_metadata_problems_are_fed_back_but_do_not_block() -> None:
 def test_profiler_failure_propagates() -> None:
     class Unreachable:
         def complete(self, messages: list[Message]) -> str:
-            raise ProfilerError(f"нет сети, сообщений: {len(messages)}")
+            raise ChatModelError(f"нет сети, сообщений: {len(messages)}")
 
-    with pytest.raises(ProfilerError):
+    with pytest.raises(ChatModelError):
         analyse(EXTRACTION, Unreachable(), max_chars=150_000, retries=2)
 
 

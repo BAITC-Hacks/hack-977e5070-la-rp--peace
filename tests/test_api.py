@@ -18,7 +18,7 @@ FINISHED = {"validated", "needs_review"}
 @pytest.fixture
 def client(tmp_path: Path, edition_profiler: RecordedProfiler) -> Iterator[TestClient]:
     settings = Settings(database_url=f"sqlite:///{(tmp_path / 'app.sqlite3').as_posix()}", max_upload_mb=1)
-    with TestClient(create_app(settings, profiler=edition_profiler)) as test_client:
+    with TestClient(create_app(settings, model=edition_profiler)) as test_client:
         yield test_client
 
 

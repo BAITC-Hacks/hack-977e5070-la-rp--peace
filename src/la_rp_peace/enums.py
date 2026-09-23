@@ -56,3 +56,60 @@ class IssueType(StrEnum):
     NUMBERING_GAP = "numbering_gap"
     UNCOVERED_TEXT = "uncovered_text"
     OTHER = "other"
+
+
+class EntitiesStatus(StrEnum):
+    """Progress of stage 2 (organisational entities) for a document."""
+
+    NOT_STARTED = "not_started"
+    RUNNING = "running"
+    DONE = "done"
+    NEEDS_REVIEW = "needs_review"
+    FAILED = "failed"
+
+
+class ParentStatus(StrEnum):
+    """How an entity's organisational parent is established."""
+
+    RESOLVED = "resolved"
+    ROOT = "root"
+    UNKNOWN = "unknown"
+    AMBIGUOUS = "ambiguous"
+
+
+class ReviewStatus(StrEnum):
+    """Review state of an entity."""
+
+    PENDING = "pending"
+    CHECKED = "checked"
+    NEEDS_REVIEW = "needs_review"
+
+
+class RelationType(StrEnum):
+    """Relations kept apart from organisational membership."""
+
+    FUNCTIONAL_SUBORDINATION = "functional_subordination"
+    ADMINISTRATIVE_MANAGEMENT = "administrative_management"
+    REPORTS_TO = "reports_to"
+    MEMBERSHIP = "membership"
+    OTHER = "other"
+
+
+class BlockStatus(StrEnum):
+    """Outcome of one block sent to the model."""
+
+    FOUND = "found"
+    NONE = "none"
+    NEEDS_CLARIFICATION = "needs_clarification"
+    FAILED = "failed"
+
+
+class EntityIssueType(StrEnum):
+    """Kinds of stage 2 problems."""
+
+    AMBIGUOUS_PARENT = "ambiguous_parent"
+    AMBIGUOUS_MERGE = "ambiguous_merge"
+    UNSUPPORTED_ATTRIBUTE = "unsupported_attribute"
+    BLOCK_FAILED = "block_failed"
+    CYCLE = "cycle"
+    OTHER = "other"

@@ -22,9 +22,9 @@ from la_rp_peace.ingestion.checks import check_tree
 from la_rp_peace.ingestion.extract.types import Extraction
 from la_rp_peace.ingestion.metadata import DocumentMetadata, MetadataResult, apply_metadata
 from la_rp_peace.ingestion.profile import CompiledProfile, ProfileError, compile_profile
-from la_rp_peace.ingestion.profiler import Profiler
-from la_rp_peace.ingestion.prompt import Message, document_view, feedback_message, initial_messages
+from la_rp_peace.ingestion.prompt import document_view, feedback_message, initial_messages
 from la_rp_peace.ingestion.tree import IssueDraft, ParsedNode, ProfileRuntimeError, build_tree
+from la_rp_peace.llm import ChatModel, Message
 from la_rp_peace.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -139,7 +139,7 @@ def _accepted(attempt: Attempt, previous: Attempt | None) -> bool:
     return not attempt.advisories or (previous is not None and attempt.advisories == previous.advisories)
 
 
-def analyse(extraction: Extraction, profiler: Profiler, max_chars: int, retries: int) -> AnalysisResult:
+def analyse(extraction: Extraction, profiler: ChatModel, max_chars: int, retries: int) -> AnalysisResult:
     """Profile, parse and verify one document.
 
     Args:
@@ -152,7 +152,7 @@ def analyse(extraction: Extraction, profiler: Profiler, max_chars: int, retries:
         The best attempt with its status.
 
     Raises:
-        ProfilerError: If the model cannot be reached.
+        ChatModelError: If the model cannot be reached.
     """
     view = document_view(extraction, max_chars)
     messages: list[Message] = initial_messages(view)

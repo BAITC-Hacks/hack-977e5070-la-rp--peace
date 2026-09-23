@@ -7,9 +7,9 @@ sample for continuous text.
 """
 
 from dataclasses import dataclass
-from typing import Literal
 
 from la_rp_peace.ingestion.extract.types import Extraction, TextBlock
+from la_rp_peace.llm import Message
 
 _HEAD_BLOCKS = 80
 _TAIL_BLOCKS = 40
@@ -76,14 +76,6 @@ approval_number, document_created_on, approved_on, effective_from; plus
   number is not a revision.
 - If a value is absent use "not_found"; if unclear use "ambiguous" with a reason.
 """
-
-
-@dataclass(frozen=True, slots=True)
-class Message:
-    """One chat message."""
-
-    role: Literal["system", "user", "assistant"]
-    content: str
 
 
 @dataclass(frozen=True, slots=True)

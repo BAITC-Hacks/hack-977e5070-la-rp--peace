@@ -1,6 +1,7 @@
 -- Backend database schema, applied once to a new SQLite file by models.create_schema().
 -- Tables follow stage 1 of the methodology (methodology/01_document_parsing.md, §9);
--- document_files and documents.doc_set are backend additions. No migrations: to change the
+-- document_files and documents.doc_set are backend additions; the entity tables implement
+-- stage 2 (methodology/02_entity_extraction.md). No migrations: to change the
 -- schema, delete the database file. SQLite 3.38+ with JSON functions.
 -- PRAGMA foreign_keys is also set on every connection by db.make_engine().
 PRAGMA foreign_keys = ON;
@@ -72,6 +73,10 @@ CREATE TABLE documents (
     uploaded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     -- Backend: which side of the comparison the user uploaded the document for.
     doc_set TEXT CHECK (doc_set IS NULL OR doc_set IN ('before', 'after', 'regulatory', 'benchmark')),
+    -- Backend: progress of stage 2 (organisational entities) for this document.
+    entities_status TEXT NOT NULL DEFAULT 'not_started' CHECK (entities_status IN (
+        'not_started', 'running', 'done', 'needs_review', 'failed'
+    )),
     CONSTRAINT documents_parsed_requires_text
         CHECK (parse_status NOT IN ('parsed', 'validated') OR original_text IS NOT NULL)
 ) STRICT;
@@ -142,6 +147,107 @@ CREATE INDEX parsing_issues_document_node
 CREATE TABLE document_files (
     document_id INTEGER PRIMARY KEY REFERENCES documents (id) ON DELETE CASCADE,
     content BLOB NOT NULL
+) STRICT;
+
+-- Stage 2: organisational objects of ONE document. Composite keys (document_id, id) keep every
+-- parent, relation and source inside the same document.
+CREATE TABLE entities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    parent_id INTEGER,
+    parent_status TEXT NOT NULL CHECK (parent_status IN ('resolved', 'root', 'unknown', 'ambiguous')),
+    name TEXT NOT NULL CHECK (trim(name) <> ''),
+    -- JSON array of other names and abbreviations found in the document.
+    aliases TEXT NOT NULL DEFAULT '[]' CHECK (
+        CASE WHEN json_valid(aliases) THEN json_type(aliases) = 'array' ELSE 0 END
+    ),
+    entity_type TEXT NOT NULL CHECK (trim(entity_type) <> ''),
+    position_type TEXT,
+    level TEXT,
+    -- JSON array of {role, scope}; every role is backed by an entity_sources row.
+    roles TEXT NOT NULL DEFAULT '[]' CHECK (
+        CASE WHEN json_valid(roles) THEN json_type(roles) = 'array' ELSE 0 END
+    ),
+    review_status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (review_status IN ('pending', 'checked', 'needs_review')),
+    CONSTRAINT entities_document_identity UNIQUE (document_id, id),
+    CONSTRAINT entities_not_own_parent CHECK (parent_id IS NOT id),
+    CONSTRAINT entities_parent_matches_status CHECK (
+        (parent_id IS NULL) = (parent_status IN ('root', 'unknown', 'ambiguous'))
+    ),
+    CONSTRAINT entities_parent_same_document
+        FOREIGN KEY (document_id, parent_id) REFERENCES entities (document_id, id)
+) STRICT;
+
+CREATE TABLE entity_relations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    from_entity_id INTEGER NOT NULL,
+    to_entity_id INTEGER NOT NULL,
+    relation_type TEXT NOT NULL CHECK (relation_type IN (
+        'functional_subordination', 'administrative_management', 'reports_to', 'membership', 'other'
+    )),
+    conditions TEXT,
+    CONSTRAINT entity_relations_document_identity UNIQUE (document_id, id),
+    CONSTRAINT entity_relations_distinct CHECK (from_entity_id <> to_entity_id),
+    CONSTRAINT entity_relations_from_same_document
+        FOREIGN KEY (document_id, from_entity_id) REFERENCES entities (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT entity_relations_to_same_document
+        FOREIGN KEY (document_id, to_entity_id) REFERENCES entities (document_id, id) ON DELETE CASCADE
+) STRICT;
+
+-- Verbatim evidence: quote_start/quote_end index into document_nodes.text of node_id.
+CREATE TABLE entity_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    entity_id INTEGER,
+    relation_id INTEGER,
+    node_id INTEGER NOT NULL,
+    quote TEXT NOT NULL CHECK (trim(quote) <> ''),
+    quote_start INTEGER NOT NULL CHECK (quote_start >= 0),
+    quote_end INTEGER NOT NULL,
+    -- JSON array of what the quote supports: name, type, parent, position_type, level, role:<r>, relation.
+    supports TEXT NOT NULL CHECK (
+        CASE WHEN json_valid(supports) THEN json_type(supports) = 'array' ELSE 0 END
+    ),
+    CONSTRAINT entity_sources_range CHECK (quote_end > quote_start),
+    CONSTRAINT entity_sources_one_owner CHECK ((entity_id IS NULL) <> (relation_id IS NULL)),
+    CONSTRAINT entity_sources_entity_same_document
+        FOREIGN KEY (document_id, entity_id) REFERENCES entities (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT entity_sources_relation_same_document
+        FOREIGN KEY (document_id, relation_id) REFERENCES entity_relations (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT entity_sources_node_same_document
+        FOREIGN KEY (document_id, node_id) REFERENCES document_nodes (document_id, id) ON DELETE CASCADE
+) STRICT;
+
+-- Processing mark for every block sent to the model: a failed request is never "none".
+CREATE TABLE entity_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    node_id INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('found', 'none', 'needs_clarification', 'failed')),
+    message TEXT,
+    attempts INTEGER NOT NULL CHECK (attempts >= 0),
+    CONSTRAINT entity_blocks_node_same_document
+        FOREIGN KEY (document_id, node_id) REFERENCES document_nodes (document_id, id) ON DELETE CASCADE
+) STRICT;
+
+CREATE TABLE entity_issues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    entity_id INTEGER,
+    relation_id INTEGER,
+    issue_type TEXT NOT NULL CHECK (issue_type IN (
+        'ambiguous_parent', 'ambiguous_merge', 'unsupported_attribute', 'block_failed', 'cycle', 'other'
+    )),
+    message TEXT NOT NULL CHECK (trim(message) <> ''),
+    is_blocking INTEGER NOT NULL DEFAULT 0 CHECK (is_blocking IN (0, 1)),
+    resolved_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    CONSTRAINT entity_issues_entity_same_document
+        FOREIGN KEY (document_id, entity_id) REFERENCES entities (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT entity_issues_relation_same_document
+        FOREIGN KEY (document_id, relation_id) REFERENCES entity_relations (document_id, id) ON DELETE CASCADE
 ) STRICT;
 
 COMMIT;

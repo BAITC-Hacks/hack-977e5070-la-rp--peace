@@ -7,17 +7,17 @@ from la_rp_peace.config import Settings
 from la_rp_peace.enums import NodeType, ParseStatus
 from la_rp_peace.ingestion.analysis import analyse
 from la_rp_peace.ingestion.extract import detect_format, extract
-from la_rp_peace.ingestion.profiler import OpenAIProfiler
+from la_rp_peace.llm import OpenAIChatModel
 
 pytestmark = pytest.mark.live
 
 
 @pytest.fixture
-def profiler() -> OpenAIProfiler:
+def profiler() -> OpenAIChatModel:
     settings = Settings()
     if settings.openai_api_key is None or not settings.openai_api_key.get_secret_value() or not settings.openai_model:
         pytest.skip("OPENAI_API_KEY and OPENAI_MODEL are not set")
-    return OpenAIProfiler(
+    return OpenAIChatModel(
         settings.openai_api_key.get_secret_value(),
         settings.openai_model,
         base_url=settings.openai_base_url or None,
@@ -26,7 +26,7 @@ def profiler() -> OpenAIProfiler:
 
 
 @pytest.mark.parametrize("suffix", [".docx", ".pdf"])
-def test_model_profiles_edition_9(profiler: OpenAIProfiler, suffix: str) -> None:
+def test_model_profiles_edition_9(profiler: OpenAIChatModel, suffix: str) -> None:
     path = edition_path(9, suffix)
     extraction = extract(detect_format(path.name, path.read_bytes()), path.read_bytes())
 

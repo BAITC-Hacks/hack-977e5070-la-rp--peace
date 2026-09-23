@@ -5,12 +5,11 @@ import openai
 import pytest
 
 from la_rp_peace.config import Settings
-from la_rp_peace.ingestion.profiler import OpenAIProfiler, ReasoningEffort
-from la_rp_peace.ingestion.prompt import Message
+from la_rp_peace.llm import Message, OpenAIChatModel, ReasoningEffort
 
 
 def _captured_request(monkeypatch: pytest.MonkeyPatch, effort: ReasoningEffort | None) -> dict[str, Any]:
-    profiler = OpenAIProfiler("sk-test", "test-model", reasoning_effort=effort)
+    profiler = OpenAIChatModel("sk-test", "test-model", reasoning_effort=effort)
     captured: dict[str, Any] = {}
 
     def create(**kwargs: Any) -> SimpleNamespace:

@@ -1,21 +1,28 @@
-"""The language-model call that proposes a document's metadata and parsing profile."""
+"""Chat-model access shared by all pipeline stages (JSON-mode answers)."""
 
+from dataclasses import dataclass
 from typing import Literal, Protocol
 
 import openai
 from openai.types.chat import ChatCompletionMessageParam
 
-from la_rp_peace.ingestion.prompt import Message
-
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
 
 
-class ProfilerError(RuntimeError):
+@dataclass(frozen=True, slots=True)
+class Message:
+    """One chat message."""
+
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
+class ChatModelError(RuntimeError):
     """The model could not be reached or returned no answer."""
 
 
-class Profiler(Protocol):
-    """Anything that answers the profiling conversation with a JSON object as text."""
+class ChatModel(Protocol):
+    """Anything that answers a conversation with a JSON object as text."""
 
     def complete(self, messages: list[Message]) -> str:
         """Return the model's reply to the conversation."""
@@ -30,8 +37,8 @@ def _to_openai(message: Message) -> ChatCompletionMessageParam:
     return {"role": "user", "content": message.content}
 
 
-class OpenAIProfiler:
-    """Profiler backed by the OpenAI Chat Completions API in JSON mode."""
+class OpenAIChatModel:
+    """Chat model backed by the OpenAI Chat Completions API in JSON mode."""
 
     def __init__(
         self,
@@ -58,7 +65,7 @@ class OpenAIProfiler:
         """Send the conversation and return the JSON text of the reply.
 
         Raises:
-            ProfilerError: On API errors or an empty reply.
+            ChatModelError: On API errors or an empty reply.
         """
         try:
             response = self._client.chat.completions.create(
@@ -68,8 +75,8 @@ class OpenAIProfiler:
                 reasoning_effort=self._reasoning_effort if self._reasoning_effort is not None else openai.omit,
             )
         except openai.OpenAIError as exc:
-            raise ProfilerError(f"Ошибка обращения к модели: {exc}") from exc
+            raise ChatModelError(f"Ошибка обращения к модели: {exc}") from exc
         content = response.choices[0].message.content if response.choices else None
         if not content:
-            raise ProfilerError("Модель вернула пустой ответ")
+            raise ChatModelError("Модель вернула пустой ответ")
         return content
