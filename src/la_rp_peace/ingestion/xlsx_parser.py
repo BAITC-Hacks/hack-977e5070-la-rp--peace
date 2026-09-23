@@ -34,6 +34,7 @@ def read_xlsx(data: bytes) -> list[ParsedClause]:
                             kind=ClauseKind.ROW,
                             text=text,
                             anchor=f"лист «{sheet.title}», стр. {row_number}",
+                            path=f"Лист «{sheet.title}» › стр. {row_number}",
                             location=Location(sheet=sheet.title, row=row_number),
                         ),
                     )

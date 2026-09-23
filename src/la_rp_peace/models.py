@@ -61,6 +61,7 @@ class Clause(Base):
     kind: Mapped[ClauseKind] = mapped_column(_str_enum(ClauseKind))
     number: Mapped[str | None] = mapped_column(String(64))
     anchor: Mapped[str] = mapped_column(String(255))
+    path: Mapped[str] = mapped_column(Text)
     text: Mapped[str] = mapped_column(Text)
     paragraph_index: Mapped[int | None] = mapped_column(Integer)
     page: Mapped[int | None] = mapped_column(Integer)

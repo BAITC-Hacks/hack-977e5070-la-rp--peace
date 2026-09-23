@@ -37,6 +37,33 @@ src/la_rp_peace/
   analysis/      Marinadec — comparison stages (not yet present)
 ```
 
+## Traceability contract (every conclusion → exact words)
+
+Non-negotiable for everything the analysis produces (tech task §7.4, §9):
+
+1. **A finding cites, never paraphrases.** Each claim carries citations
+   `{clause_id, quote}` for the side(s) it is about; a change cites **both** documents
+   (e.g. «unit created» cites the before list without it and the after list with it).
+2. **The quote is copied word for word** from the clause text returned by
+   `GET /api/documents/{id}/clauses`. `sources.resolve_source()` (HTTP:
+   `POST /api/sources/resolve`) rejects any quote not found verbatim in the clause
+   (whitespace aside) — the analysis must drop or retry such a finding, never show it.
+3. **A resolved source tells a person where to look** in the original file:
+
+   | Field | Example |
+   |---|---|
+   | `document_name`, `set` | `…редакция_9….pdf`, `after` |
+   | `path` | `Разд. 3 «Структура и организация работы внутреннего аудита» › п. 3.4 › подп. «а»` |
+   | `page` | `6` — PDF only; DOCX files carry no reliable page numbers |
+   | `paragraph_index` / `sheet`+`row` | DOCX paragraph position / Excel cell row |
+   | `quote`, `context`, `start`, `end` | the cited words, the full clause text, and their offsets in it for highlighting |
+
+   Clause numbers are part of the document text, so `path` + `quote` find the spot with
+   Ctrl+F in Word or any PDF viewer.
+
+`GET /api/clauses/{clause_id}` returns a clause as a source quoting its whole text.
+The frontend's `SourceRef` (frontend.md §4) should follow this shape.
+
 ## Slices
 
 ### 1. Ingestion + document API — **done**
@@ -54,6 +81,11 @@ Document type is guessed from title/filename (`classify.py`) and can be overridd
 
 Endpoints: `POST/GET /api/documents`, `GET/PATCH/DELETE /api/documents/{id}`,
 `GET /api/documents/{id}/clauses`, `GET /api/documents/{id}/file`, `GET /api/health`.
+
+PDF paragraphs are rebuilt from lines (justified words merged, wrapped lines and page
+breaks joined, bold headings kept apart): the Word-exported PDFs in `test_data/converted/`
+slice exactly like their DOCX originals, which a test enforces. Every clause has a `path`
+and quotes are verified by `sources.py` (see the traceability contract above).
 
 ### 2. Analyses and live progress
 

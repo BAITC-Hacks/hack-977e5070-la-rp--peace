@@ -49,6 +49,7 @@ def _to_model(filename: str, doc_set: DocSet, data: bytes, parsed: ParsedDocumen
             kind=clause.kind,
             number=clause.number,
             anchor=clause.anchor,
+            path=clause.path,
             text=clause.text,
             paragraph_index=clause.location.paragraph_index,
             page=clause.location.page,

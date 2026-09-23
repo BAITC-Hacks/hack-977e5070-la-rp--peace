@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import sessionmaker
 
-from la_rp_peace.api import documents
+from la_rp_peace.api import documents, sources
 from la_rp_peace.config import Settings, get_settings
 from la_rp_peace.db import make_engine
 from la_rp_peace.logging_config import configure_logging, get_logger
@@ -49,6 +49,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(documents.router)
+    app.include_router(sources.router)
 
     @app.get("/api/health", tags=["meta"])
     def health() -> dict[str, str]:

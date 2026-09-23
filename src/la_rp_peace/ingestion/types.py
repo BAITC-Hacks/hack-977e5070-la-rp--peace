@@ -37,7 +37,9 @@ class ParsedClause:
     Attributes:
         kind: Structural role of the fragment.
         text: Fragment text, including its own number prefix.
-        anchor: Human-readable citation, e.g. «п. 5.3.2 «а»».
+        anchor: Short citation, e.g. «п. 5.3.2 «а»».
+        path: Where to look in the document, from the section down, e.g.
+            «Разд. 3 «Структура…» › п. 3.4 › подп. «а»».
         location: Position in the source file.
         number: Dotted clause number for numbered clauses, e.g. «5.3.2».
         parent: Index of the parent clause in the document's clause list.
@@ -46,6 +48,7 @@ class ParsedClause:
     kind: ClauseKind
     text: str
     anchor: str
+    path: str
     location: Location
     number: str | None = None
     parent: int | None = None

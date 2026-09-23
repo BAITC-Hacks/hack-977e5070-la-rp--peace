@@ -40,6 +40,7 @@ class ClauseOut(BaseModel):
     kind: ClauseKind
     number: str | None
     anchor: str
+    path: str
     text: str
     paragraph_index: int | None
     page: int | None

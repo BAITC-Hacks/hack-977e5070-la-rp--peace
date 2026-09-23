@@ -25,6 +25,8 @@ _TOC_MARKERS = frozenset({"оглавление", "содержание"})
 _TOC_ENTRY = re.compile(r"\s\d{1,3}$")
 _WHITESPACE = re.compile(r"\s+")
 _ROOT_ANCHOR = "вводная часть"
+_ROOT_PATH = "Вводная часть"
+PATH_SEPARATOR = " › "
 
 
 def normalize_text(text: str) -> str:
@@ -128,13 +130,14 @@ class _TreeBuilder:
         if number is not None:
             self._add_numbered(number, text, block)
         elif (letter := _LETTER_ITEM.match(text)) is not None:
-            self._add_child(ClauseKind.ITEM, text, block, f" «{letter.group('letter')}»")
+            mark = f"«{letter.group('letter')}»"
+            self._add_child(ClauseKind.ITEM, text, block, f" {mark}", f"подп. {mark}")
         elif _DASH_ITEM.match(text) is not None:
-            self._add_child(ClauseKind.ITEM, text, block, ", подп. {n}")
+            self._add_child(ClauseKind.ITEM, text, block, ", подп. {n}", "подп. {n}")
         elif _is_heading_style(block.style):
             self._add_unnumbered_heading(text, block)
         else:
-            self._add_child(ClauseKind.PARAGRAPH, text, block, ", абз. {n}")
+            self._add_child(ClauseKind.PARAGRAPH, text, block, ", абз. {n}", "абз. {n}")
 
     def _append(self, clause: ParsedClause) -> int:
         self.clauses.append(clause)
@@ -142,6 +145,10 @@ class _TreeBuilder:
 
     def _anchor_of(self, index: int | None) -> str:
         return _ROOT_ANCHOR if index is None else self.clauses[index].anchor
+
+    def _path_under(self, parent: int | None, label: str, *, root: str | None = None) -> str:
+        base = root if parent is None else self.clauses[parent].path
+        return label if base is None else base + PATH_SEPARATOR + label
 
     def _add_numbered(self, number: Number, text: str, block: Block) -> None:
         parent = next(
@@ -154,11 +161,17 @@ class _TreeBuilder:
         )
         is_section = len(number) == 1 or _is_heading_style(block.style)
         dotted = ".".join(str(part) for part in number)
+        if len(number) == 1:
+            title = _LEADING_NUMBER.sub("", text, count=1)
+            label = f"Разд. {dotted} «{_shorten(title)}»"
+        else:
+            label = f"п. {dotted}"
         index = self._append(
             ParsedClause(
                 kind=ClauseKind.HEADING if is_section else ClauseKind.CLAUSE,
                 text=text,
                 anchor=f"разд. {dotted}" if len(number) == 1 else f"п. {dotted}",
+                path=self._path_under(parent, label),
                 location=block.location,
                 number=dotted,
                 parent=parent,
@@ -175,17 +188,27 @@ class _TreeBuilder:
                 kind=ClauseKind.HEADING,
                 text=text,
                 anchor=f"«{_shorten(text)}»",
+                path=self._path_under(section, f"«{_shorten(text)}»"),
                 location=block.location,
                 parent=section,
             ),
         )
         self._container = index
 
-    def _add_child(self, kind: ClauseKind, text: str, block: Block, suffix: str) -> None:
+    def _add_child(self, kind: ClauseKind, text: str, block: Block, anchor_suffix: str, label: str) -> None:
         parent = self._container
         self._child_counts[parent] += 1
-        anchor = self._anchor_of(parent) + suffix.format(n=self._child_counts[parent])
-        self._append(ParsedClause(kind=kind, text=text, anchor=anchor, location=block.location, parent=parent))
+        count = self._child_counts[parent]
+        self._append(
+            ParsedClause(
+                kind=kind,
+                text=text,
+                anchor=self._anchor_of(parent) + anchor_suffix.format(n=count),
+                path=self._path_under(parent, label.format(n=count), root=_ROOT_PATH),
+                location=block.location,
+                parent=parent,
+            ),
+        )
 
 
 def build_clauses(blocks: Iterable[Block]) -> list[ParsedClause]:
