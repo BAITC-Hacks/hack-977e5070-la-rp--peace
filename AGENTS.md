@@ -45,8 +45,8 @@ Shared files need a heads-up in team chat before changing them.
 
   ```bash
   uv run ruff format . && uv run ruff check --fix .
-  uv run mypy .      # once the first .py file exists
-  uv run pytest -q   # once a tests/ directory exists
+  uv run mypy .
+  uv run pytest -q
   ```
 
 ## Working style

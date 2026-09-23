@@ -118,19 +118,18 @@ Ignored rules (with justification):
 
 ## Project Layout
 
-Python 3.12. Currently a **non-package project** (`package = false`) -- there is no
-importable package yet, because the project scope is not defined. When code lands:
+Python 3.12, `src/` layout, built with Hatchling.
 
-- Add the package (and a `[build-system]`, dropping `package = false` if it should be
-  installable), then set `known-first-party` under `[tool.ruff.lint.isort]`.
-- Add `tests/` and set `testpaths = ["tests"]` under `[tool.pytest.ini_options]`.
-- If the project becomes a `uv` workspace, run `mypy` once per member instead of once
-  at the root.
+```
+src/la_rp_peace/          importable package (name derives from project.name)
+  logging_config.py       configure_logging() / get_logger()
+tests/                    pytest suite, testpaths in pyproject.toml
+```
 
-**Until then, two of the four checks in step 1 fail for lack of code, not for lack of
-correctness:** `mypy .` exits 2 (`no .py[i] files`) and `pytest` exits 5 (no tests
-collected). Both must go green with the first real module and its test. Do not silence
-them with stub modules or empty test files -- see Mandatory Agent Rule 1.
+Add new modules under `src/la_rp_peace/` and their tests under `tests/`. If the project
+grows into a `uv` workspace, run `mypy` once per member instead of once at the root.
+
+All four checks in step 1 below are green and must stay that way.
 
 ## Validation & Git Workflow
 

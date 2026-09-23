@@ -7,15 +7,19 @@ dependencies = [
     "structlog>=25.1.0",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/la_rp_peace"]
+
 [dependency-groups]
 dev = [
     "ruff>=0.9.0",
     "mypy>=1.14.0",
     "pytest>=8.3.0",
 ]
-
-[tool.uv]
-package = false
 
 # ---------------------------------------------------------------------------
 # ruff -- rule set mirrors .agents/guidelines.md; keep the two in sync.
@@ -53,6 +57,9 @@ ignore = [
     "S324",   # sha1/md5 hashing -- used for cache keys, not security
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["la_rp_peace"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
     "S101", # pytest relies on bare assert
@@ -75,7 +82,8 @@ warn_unreachable = true
 show_error_codes = true
 
 # ---------------------------------------------------------------------------
-# pytest -- add `testpaths = ["tests"]` once the suite exists.
+# pytest -- discover the test suite under tests/.
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"
