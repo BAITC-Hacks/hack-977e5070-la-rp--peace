@@ -1,0 +1,47 @@
+# Frontend
+
+Интерфейс агента: загрузка документов и просмотр результатов. SvelteKit (Svelte 5), TypeScript,
+Tailwind CSS; собирается в статическое SPA. Спецификация — [`.agents/frontend.md`](../.agents/frontend.md).
+
+## Запуск
+
+Нужны Node.js 20+ и бэкенд, запущенный по инструкции из корневого [`README.md`](../README.md)
+(API на <http://localhost:8000>). pnpm ставится через corepack из поставки Node:
+
+```bash
+cd frontend
+corepack enable pnpm      # один раз; либо запускайте команды как `corepack pnpm …`
+pnpm install
+pnpm dev                  # http://localhost:5173
+```
+
+Адрес API задаёт `PUBLIC_API_URL` (по умолчанию `http://localhost:8000`, см. `.env.example`).
+Бэкенд по умолчанию разрешает CORS для `http://localhost:5173`.
+
+Сборка: `pnpm build` → каталог `build/`, для любых путей отдаётся `200.html`.
+
+## Проверки
+
+Перед каждым коммитом, затрагивающим `frontend/`:
+
+```bash
+pnpm format && pnpm lint
+pnpm check                # svelte-check, ноль ошибок и предупреждений
+pnpm test -- --run
+```
+
+Юнит-тесты (`*.spec.ts`) идут в Node. Компонентные тесты (`*.svelte.spec.ts`) запускаются в
+Chromium через Playwright — перед первым запуском: `pnpm exec playwright install chromium`.
+
+## Устройство
+
+```
+src/lib/api/          клиент HTTP API (types.ts — зеркало моделей бэкенда, errors.ts, client.ts)
+src/lib/upload/       логика экрана загрузки: форматы файлов, состояние загрузок (session.svelte.ts)
+src/lib/documents.ts  типы документов и комплекты «до» / «после» / нормативка / бенчмаркинг
+src/lib/components/   UploadZone, FileRow
+src/routes/           «/» — новый анализ (загрузка)
+```
+
+Логика вынесена из компонентов в модули, чтобы тестировать её без браузера; API в
+`UploadSession` передаётся параметром.
