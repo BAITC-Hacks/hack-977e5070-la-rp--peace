@@ -103,7 +103,14 @@ goes `not_started → running → done | needs_review | failed`. Each document i
 4. Final checks (§8): parents exist, no cycles, name sources present, root/resolved without a
    `parent` source falls back to `unknown`. Entities with an open issue get `needs_review`,
    the others `checked`; the document is `needs_review` if any issue is blocking or a block
-   failed, else `done`. One transaction replaces all stage 2 rows of the document.
+   failed, else `done`. One transaction writes the result.
+5. Re-runs (§4): every source records its block (`entity_sources.block_node_id`, NULL for the
+   review), so a block's new verified answer replaces its previous contribution; objects also
+   confirmed by other blocks stay. A block that fails keeps its previous contribution (sources
+   re-checked against the current node texts; stale ones dropped with an issue) and is marked
+   `failed` + blocking issue. Unchanged objects keep their `entities.id` (unique match on
+   name/alias + type + parent; rows updated in place), relations keep ids by ends + type;
+   objects no longer found are deleted. A crash (`failed` status) leaves the stored result as is.
 
 ## Traceability contract (every conclusion -> exact words)
 
