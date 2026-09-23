@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { nodeAnchorId, parseCompareParams, parseNodeHash } from './anchor';
+import { compareQuery, nodeAnchorId, parseCompareParams, parseNodeHash } from './anchor';
 
 describe('parseCompareParams', () => {
 	it('reads both document ids', () => {
@@ -15,6 +15,15 @@ describe('parseCompareParams', () => {
 			before: null,
 			after: null
 		});
+	});
+});
+
+describe('compareQuery', () => {
+	it('builds the query parseCompareParams reads back', () => {
+		const query = compareQuery(7, 12);
+
+		expect(query).toBe('?before=7&after=12');
+		expect(parseCompareParams(new URLSearchParams(query))).toEqual({ before: 7, after: 12 });
 	});
 });
 

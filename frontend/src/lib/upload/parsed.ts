@@ -24,3 +24,14 @@ export function parsedDocuments(
 		)
 	);
 }
+
+/** The first parsed «До» and «После» documents, which the Word view compares; null without both. */
+export function comparePair(
+	documents: readonly ParsedDocument[]
+): { before: number; after: number } | null {
+	const before = documents.find((doc) => doc.set === 'before');
+	const after = documents.find((doc) => doc.set === 'after');
+	return before === undefined || after === undefined
+		? null
+		: { before: before.id, after: after.id };
+}

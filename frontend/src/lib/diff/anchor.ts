@@ -26,3 +26,8 @@ export function parseNodeHash(hash: string): number | null {
 	const match = /^#node-(\d+)$/.exec(hash);
 	return match === null ? null : parseDocumentId(match[1]);
 }
+
+/** Query of the Word view for two documents; `parseCompareParams` reads it back. */
+export function compareQuery(before: number, after: number): `?${string}` {
+	return `?${new URLSearchParams({ before: String(before), after: String(after) })}`;
+}
