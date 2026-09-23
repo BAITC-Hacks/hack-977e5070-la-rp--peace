@@ -20,9 +20,9 @@
 	<div class="grid gap-1.5">
 		<h1 class="text-2xl font-semibold text-balance">Анализ реорганизации</h1>
 		<p class="max-w-[72ch] text-muted">
-			Загрузите документ до и после реорганизации — например, положение о подразделении в двух
-			редакциях. Агент покажет, что изменилось, и найдёт потерю функций, дублирование и конфликт
-			интересов — со ссылкой на пункт документа.
+			Загрузите положение и штатное расписание до и после реорганизации. Агент покажет, что
+			изменилось, и найдёт потерю функций, дублирование и конфликт интересов — со ссылкой на пункт
+			документа.
 		</p>
 	</div>
 
@@ -74,7 +74,8 @@
 			>
 				Начать анализ
 			</button>
-			<p id={hintId} class="text-sm wrap-anywhere text-muted">{blocker}</p>
+			<!-- The hint may name a file: a long name wraps instead of widening a phone screen. -->
+			<p id={hintId} class="max-w-full text-sm wrap-anywhere text-muted">{blocker}</p>
 		{:else}
 			<a
 				href={resolve('/status')}

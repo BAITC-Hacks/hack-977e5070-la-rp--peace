@@ -99,6 +99,7 @@
 				class="min-w-40 flex-1 rounded-md border border-line bg-page px-2 py-1 text-sm disabled:opacity-60"
 				value={item.document.document_type ?? ''}
 				placeholder="Не определён"
+				aria-describedby={`${uid}-type-hint`}
 				disabled={item.busy}
 				onchange={onTypeChange}
 			/>
@@ -115,11 +116,16 @@
 				Открыть структуру
 			</a>
 		</div>
+		<p id={`${uid}-type-hint`} class="mt-1 text-xs text-muted">
+			{item.document.document_type === null
+				? 'В документе тип не найден — выберите из списка или впишите свой.'
+				: 'Если тип неверный, выберите другой из списка или впишите свой.'}
+		</p>
 	{/if}
 
 	{#if item.error}
 		<div class="mt-2 flex items-start gap-2 text-sm text-bad" role="alert">
-			<p class="flex-1">{item.error}</p>
+			<p class="min-w-0 flex-1 wrap-anywhere">{item.error}</p>
 			{#if item.status === 'failed' && item.retriable}
 				<button
 					type="button"

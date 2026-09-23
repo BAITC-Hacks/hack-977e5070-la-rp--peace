@@ -99,18 +99,19 @@
 			{/if}
 
 			<div class="grid min-w-0 flex-1 gap-0.5">
-				<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+				<!-- Markers, places and texts can be one long word; wrap them on a phone screen. -->
+				<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 wrap-anywhere">
 					{#if node.marker}
-						<span class="font-mono text-sm font-semibold">{node.marker}</span>
+						<span class="min-w-0 font-mono text-sm font-semibold">{node.marker}</span>
 					{/if}
-					<span class="font-mono text-xs text-muted">{node.anchor}</span>
+					<span class="min-w-0 font-mono text-xs text-muted">{node.anchor}</span>
 					<span class="rounded bg-neutral-soft px-1.5 text-xs text-neutral">
 						{NODE_TYPE_LABELS[node.node_type]}
 					</span>
 				</div>
 				<p
 					class={[
-						'text-sm break-words whitespace-pre-line',
+						'text-sm wrap-anywhere whitespace-pre-line',
 						(node.node_type === 'section' || node.node_type === 'heading') && 'font-semibold'
 					]}
 				>

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
+
+import '../../../routes/layout.css';
 
 import type { NodeOut, NodeType } from '$lib/api/document';
 import { TreeState } from '$lib/document/tree-state.svelte';
@@ -52,6 +54,18 @@ function item(container: HTMLElement, id: number): HTMLElement {
 		throw new Error(`node ${id} is not rendered`);
 	}
 	return element;
+}
+
+const LONG_WORD =
+	'Положение_о_департаменте_информационной_безопасности_и_рисков_редакция_2025_года';
+
+/** A 360 px phone screen: the page column is a grid, so it grows with unbreakable content. */
+async function phoneFrame(): Promise<HTMLElement> {
+	await page.viewport(360, 800);
+	const frame = document.createElement('div');
+	frame.style.cssText = 'display: grid; width: 360px; padding-inline: 16px; box-sizing: border-box';
+	document.body.append(frame);
+	return frame;
 }
 
 describe('NodeTree', () => {
@@ -145,5 +159,27 @@ describe('NodeTree', () => {
 		const screen = await render(NodeTree, { tree: new TreeState([]) });
 
 		await expect.element(screen.getByText('Структура документа не извлечена.')).toBeVisible();
+	});
+
+	it('wraps long markers, places and texts within a phone screen', async () => {
+		const frame = await phoneFrame();
+		const deep = [0, 1, 2, 3, 4, 5].map((level) =>
+			node(
+				200 + level,
+				level === 0 ? null : 199 + level,
+				0,
+				'clause',
+				`2.${'8.'.repeat(level)}1`,
+				`after:dibr:2.${'8.'.repeat(level)}1`,
+				`Департамент обеспечивает ${LONG_WORD}`
+			)
+		);
+		const tree = new TreeState(deep);
+		tree.expandAll();
+		await render(NodeTree, { target: frame, props: { tree, onopen: () => {} } });
+
+		await expect.element(page.getByRole('treeitem').last()).toBeVisible();
+		expect(frame.scrollWidth).toBeLessThanOrEqual(frame.clientWidth);
+		frame.remove();
 	});
 });

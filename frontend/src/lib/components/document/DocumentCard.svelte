@@ -27,7 +27,10 @@
 {#if isCardEmpty(fields) && extra.length === 0}
 	<p class="text-sm text-muted">Реквизиты не извлечены.</p>
 {:else}
-	<dl class="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-y-3">
+	<!-- Values and quotes can hold one long word (a file name); wrap it rather than widen a phone screen. -->
+	<dl
+		class="grid grid-cols-1 gap-x-4 gap-y-1 wrap-anywhere sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-y-3"
+	>
 		{#each fields as field (field.name)}
 			<dt class="pt-0.5 text-xs font-medium tracking-[0.07em] text-muted uppercase">
 				{field.label}
