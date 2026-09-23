@@ -38,7 +38,14 @@ function upload(
 	document: DocumentOut | null = null,
 	error: string | null = null
 ): UploadProgress {
-	return { set: 'before', file: new File([], 'Положение_2024.docx'), status, document, error };
+	return {
+		set: 'before',
+		name: 'Положение_2024.docx',
+		status,
+		document,
+		documentId: document?.id ?? null,
+		error
+	};
 }
 
 describe('progressOf', () => {
@@ -88,5 +95,14 @@ describe('progressOf', () => {
 		);
 		expect(lost.stages).toMatchObject({ uploaded: 'done', parsed: 'failed' });
 		expect(errorMessage(lost)).toBe('Этап «Распознан»: Сервер недоступен.');
+	});
+
+	it('keeps the upload complete when a restored document cannot be fetched', () => {
+		const row = progressOf({
+			...upload('failed', null, 'Сервер недоступен.'),
+			documentId: 1
+		});
+		expect(row.stages).toEqual({ uploaded: 'done', parsed: 'failed', segmented: 'waiting' });
+		expect(errorMessage(row)).toBe('Этап «Распознан»: Сервер недоступен.');
 	});
 });

@@ -5,6 +5,7 @@ import { ApiError } from '$lib/api/errors';
 import type { DocSet, DocumentOut } from '$lib/api/types';
 
 import { POLL_INTERVAL_MS, UploadSession } from './session.svelte';
+import { UPLOAD_SESSION_KEY, type SessionStorage } from './persistence';
 
 const DOCUMENT_ID = 7;
 
@@ -93,7 +94,7 @@ describe('UploadSession.add', () => {
 		await settle();
 
 		expect(rejected).toEqual(['notes.txt']);
-		expect(session.itemsIn('after').map((item) => item.file.name)).toEqual(['a.pdf']);
+		expect(session.itemsIn('after').map((item) => item.name)).toEqual(['a.pdf']);
 		expect(session.itemsIn('before')).toEqual([]);
 		expect(session.items[0].document?.id).toBe(DOCUMENT_ID);
 		expect(api.upload).toHaveBeenCalledWith(expect.any(File), 'after', expect.any(Function));
@@ -103,7 +104,7 @@ describe('UploadSession.add', () => {
 		const api = fakeApi({
 			upload: (file, set, onProgress) => {
 				onProgress(0.42);
-				return new Promise(() => {});
+				return new Promise<DocumentOut>(() => {});
 			}
 		});
 		const session = new UploadSession(api);
@@ -370,5 +371,204 @@ describe('UploadSession.remove', () => {
 
 		expect(api.remove).not.toHaveBeenCalled();
 		expect(session.items).toEqual([]);
+	});
+});
+
+function memoryStorage(initial: string | null = null): SessionStorage {
+	const values = new Map<string, string>();
+	if (initial !== null) values.set(UPLOAD_SESSION_KEY, initial);
+	return {
+		getItem: vi.fn((key) => values.get(key) ?? null),
+		setItem: vi.fn((key, next: string) => {
+			values.set(key, next);
+		})
+	};
+}
+
+const savedUpload = { id: DOCUMENT_ID, set: 'before', name: 'Положение_ред_9.docx', size: 7 };
+const snapshot = () => JSON.stringify({ version: 1, items: [savedUpload] });
+
+describe('UploadSession persistence', () => {
+	it('does not restore document ids saved for a different backend', async () => {
+		const storage = memoryStorage();
+		const original = new UploadSession(fakeApi(), () => storage, 'backend-a');
+		original.add('before', [docx()]);
+		await settle();
+		original.dispose();
+		const api = fakeApi();
+		const otherBackend = new UploadSession(api, () => storage, 'backend-b');
+		await otherBackend.restore();
+		expect(otherBackend.items).toEqual([]);
+		expect(api.get).not.toHaveBeenCalled();
+		const sameBackend = new UploadSession(api, () => storage, 'backend-a');
+		await sameBackend.restore();
+		expect(sameBackend.items[0].documentId).toBe(DOCUMENT_ID);
+	});
+
+	it('restores the selected documents after reload, rechecks their state and resumes polling', async () => {
+		const storage = memoryStorage();
+		const original = new UploadSession(fakeApi(), () => storage);
+		original.add('before', [docx()]);
+		await settle();
+		expect(JSON.parse(storage.getItem(UPLOAD_SESSION_KEY)!)).toEqual({
+			version: 1,
+			items: [savedUpload]
+		});
+		original.dispose();
+		const api = fakeApi({
+			get: vi
+				.fn<DocumentsApi['get']>()
+				.mockResolvedValueOnce(storedDocument())
+				.mockResolvedValueOnce(validated)
+		});
+		const reloaded = new UploadSession(api, () => storage);
+
+		await reloaded.restore();
+		expect(api.get).toHaveBeenCalledWith(DOCUMENT_ID);
+		expect(api.upload).not.toHaveBeenCalled();
+		expect(reloaded.items[0].file).toBeNull();
+		expect(reloaded.items[0].name).toBe(savedUpload.name);
+		expect(reloaded.items[0].size).toBe(savedUpload.size);
+		expect(reloaded.items[0].status).toBe('parsing');
+		expect(reloaded.restoring).toBe(false);
+
+		await nextPoll();
+		expect(reloaded.items[0].status).toBe('parsed');
+		expect(api.get).toHaveBeenCalledTimes(2);
+	});
+
+	it('does not restore file bytes that had not reached the backend', async () => {
+		const storage = memoryStorage();
+		const api = fakeApi({ upload: vi.fn(() => new Promise<DocumentOut>(() => {})) });
+		const original = new UploadSession(api, () => storage);
+		original.add('before', [docx()]);
+		original.dispose();
+		const reloadedApi = fakeApi();
+		const reloaded = new UploadSession(reloadedApi, () => storage);
+		await reloaded.restore();
+		expect(reloaded.items).toEqual([]);
+		expect(reloadedApi.upload).not.toHaveBeenCalled();
+		expect(reloadedApi.get).not.toHaveBeenCalled();
+	});
+
+	it('restores only once even when called again during an outstanding read', async () => {
+		let resolveRead!: (document: DocumentOut) => void;
+		const api = fakeApi({
+			get: vi.fn(
+				() =>
+					new Promise<DocumentOut>((resolve) => {
+						resolveRead = resolve;
+					})
+			)
+		});
+		const storage = memoryStorage(snapshot());
+		const session = new UploadSession(api, () => storage);
+		const restoring = session.restore();
+		expect(session.restore()).toBe(restoring);
+		expect(session.restoring).toBe(true);
+		expect(session.items).toHaveLength(1);
+		resolveRead(validated);
+		await restoring;
+		await session.restore();
+		expect(api.get).toHaveBeenCalledTimes(1);
+		expect(session.restoring).toBe(false);
+	});
+
+	it('keeps a missing document visible as an error until removal, without re-uploading it', async () => {
+		const api = fakeApi({
+			get: vi.fn().mockRejectedValue(new ApiError('Документ не найден', 404)),
+			remove: vi.fn().mockRejectedValue(new ApiError('Документ не найден', 404))
+		});
+		const storage = memoryStorage(snapshot());
+		const session = new UploadSession(api, () => storage);
+		await session.restore();
+		const [item] = session.items;
+		expect(item.status).toBe('failed');
+		expect(item.error).toBe('Документ не найден');
+		expect(item.retriable).toBe(false);
+		session.retry(item);
+		expect(api.get).toHaveBeenCalledTimes(1);
+		expect(api.upload).not.toHaveBeenCalled();
+		await session.remove(item);
+		const reloaded = new UploadSession(api, () => storage);
+		await reloaded.restore();
+		expect(reloaded.items).toEqual([]);
+	});
+
+	it('retries the stored id after a network failure even though no document was read yet', async () => {
+		const api = fakeApi({
+			get: vi
+				.fn<DocumentsApi['get']>()
+				.mockRejectedValueOnce(new ApiError('Сервер недоступен', 0))
+				.mockResolvedValueOnce(validated)
+		});
+		const storage = memoryStorage(snapshot());
+		const session = new UploadSession(api, () => storage);
+		await session.restore();
+		const [item] = session.items;
+		expect(item.document).toBeNull();
+		expect(item.retriable).toBe(true);
+		session.retry(item);
+		await settle();
+		expect(item.status).toBe('parsed');
+		expect(api.get).toHaveBeenCalledTimes(2);
+		expect(api.upload).not.toHaveBeenCalled();
+	});
+
+	it('does not revive a removed item when its restoration request finishes late', async () => {
+		let resolveRead!: (document: DocumentOut) => void;
+		const api = fakeApi({
+			get: vi.fn(
+				() =>
+					new Promise<DocumentOut>((resolve) => {
+						resolveRead = resolve;
+					})
+			)
+		});
+		const storage = memoryStorage(snapshot());
+		const session = new UploadSession(api, () => storage);
+		const restoring = session.restore();
+		await session.remove(session.items[0]);
+		resolveRead(storedDocument());
+		await restoring;
+		await nextPoll();
+		expect(session.items).toEqual([]);
+		expect(api.get).toHaveBeenCalledTimes(1);
+		const reloaded = new UploadSession(api, () => storage);
+		await reloaded.restore();
+		expect(reloaded.items).toEqual([]);
+	});
+
+	it('retains saved ids if deletion fails', async () => {
+		const api = fakeApi({
+			remove: vi.fn().mockRejectedValue(new ApiError('Сервер недоступен', 0))
+		});
+		const storage = memoryStorage(snapshot());
+		const session = new UploadSession(api, () => storage);
+		await session.restore();
+		await session.remove(session.items[0]);
+		const reloaded = new UploadSession(api, () => storage);
+		await reloaded.restore();
+		expect(reloaded.items).toHaveLength(1);
+		expect(reloaded.items[0].documentId).toBe(DOCUMENT_ID);
+	});
+
+	it('ignores corrupted storage and continues uploading when storage is blocked', async () => {
+		const corruptedApi = fakeApi();
+		const corrupted = new UploadSession(corruptedApi, () => memoryStorage('{'));
+		await corrupted.restore();
+		expect(corrupted.items).toEqual([]);
+		expect(corruptedApi.get).not.toHaveBeenCalled();
+
+		const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const blocked = new UploadSession(fakeApi(), () => {
+			throw new Error('Storage disabled');
+		});
+		await blocked.restore();
+		blocked.add('before', [docx()]);
+		await nextPoll();
+		expect(blocked.items[0].status).toBe('parsed');
+		expect(warning).toHaveBeenCalledTimes(2);
+		warning.mockRestore();
 	});
 });

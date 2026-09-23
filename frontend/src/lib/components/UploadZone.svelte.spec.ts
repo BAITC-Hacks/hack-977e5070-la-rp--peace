@@ -123,7 +123,7 @@ describe('UploadZone', () => {
 		await expect
 			.element(screen.getByRole('alert'))
 			.toHaveTextContent('Файл уже загружен. Удалите его, чтобы выбрать другой.');
-		expect(session.items.map((item) => item.file.name)).toEqual(['a.docx']);
+		expect(session.items.map((item) => item.name)).toEqual(['a.docx']);
 	});
 
 	it('wraps the name of a refused file instead of widening a phone screen', async () => {

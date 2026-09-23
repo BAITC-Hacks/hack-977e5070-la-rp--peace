@@ -14,12 +14,12 @@ const SET_ORDER = DOC_SETS.map((info) => info.set);
 
 /** Parsed documents: «До» first, then «После», then the external sets, each in upload order. */
 export function parsedDocuments(
-	items: readonly Pick<UploadItem, 'set' | 'file' | 'document' | 'parsed'>[]
+	items: readonly Pick<UploadItem, 'set' | 'name' | 'document' | 'parsed'>[]
 ): ParsedDocument[] {
 	return SET_ORDER.flatMap((set) =>
 		items.flatMap((item) =>
 			item.set === set && item.parsed && item.document !== null
-				? [{ id: item.document.id, set, name: item.file.name }]
+				? [{ id: item.document.id, set, name: item.name }]
 				: []
 		)
 	);

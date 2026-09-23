@@ -3,6 +3,12 @@ import { ApiError, describeError } from '$lib/api/errors';
 import type { DocSet, DocumentOut, ParseStatus } from '$lib/api/types';
 
 import { isAccepted } from './files';
+import {
+	readSavedUploads,
+	UPLOAD_SESSION_KEY,
+	type SavedUpload,
+	type SessionStorage
+} from './persistence';
 
 /** How often a document is re-read while the backend parses it. */
 export const POLL_INTERVAL_MS = 2000;
@@ -30,8 +36,12 @@ const STATUS_LABELS: Record<Exclude<UploadStatus, 'uploading'>, string> = {
 /** One file dropped into an upload zone, from the first byte sent until it is removed. */
 export class UploadItem {
 	readonly key = crypto.randomUUID();
-	readonly file: File;
+	/** File bytes exist only until this browser page is reloaded. */
+	readonly file: File | null;
+	readonly name: string;
+	readonly size: number;
 	readonly set: DocSet;
+	documentId = $state<number | null>(null);
 	status = $state<UploadStatus>('uploading');
 	/** Share of bytes sent, 0..1. */
 	progress = $state(0);
@@ -43,8 +53,10 @@ export class UploadItem {
 	/** A type change or deletion is in flight. */
 	busy = $state(false);
 
-	constructor(file: File, set: DocSet) {
-		this.file = file;
+	constructor(file: File | Pick<File, 'name' | 'size'>, set: DocSet) {
+		this.file = file instanceof File ? file : null;
+		this.name = file.name;
+		this.size = file.size;
 		this.set = set;
 	}
 
@@ -73,11 +85,64 @@ function delay(ms: number): Promise<void> {
 /** Files of the new-analysis screen across all document sets, kept in sync with the backend. */
 export class UploadSession {
 	items = $state<UploadItem[]>([]);
+	restoring = $state(false);
 	readonly #api: DocumentsApi;
+	readonly #storage: (() => SessionStorage) | undefined;
+	readonly #storageKey: string;
+	#restorePromise: Promise<void> | null = null;
 	#disposed = false;
 
-	constructor(api: DocumentsApi) {
+	constructor(api: DocumentsApi, storage?: () => SessionStorage, storageKey = UPLOAD_SESSION_KEY) {
 		this.#api = api;
+		this.#storage = storage;
+		this.#storageKey = storageKey;
+	}
+
+	/** Reloads only this tab's registered document ids, once per session instance. */
+	restore(): Promise<void> {
+		if (this.#restorePromise !== null) return this.#restorePromise;
+		this.#restorePromise = this.#restore();
+		return this.#restorePromise;
+	}
+
+	async #restore(): Promise<void> {
+		if (this.#disposed || this.#storage === undefined) return;
+		let saved: SavedUpload[];
+		try {
+			saved = readSavedUploads(this.#storage().getItem(this.#storageKey));
+		} catch (error) {
+			console.warn('Could not restore upload session', error);
+			return;
+		}
+		const restored = saved
+			.filter(({ id }) => !this.items.some((item) => item.documentId === id))
+			.map((entry) => {
+				const item = new UploadItem(entry, entry.set);
+				item.documentId = entry.id;
+				item.status = 'parsing';
+				return item;
+			});
+		this.items.push(...restored);
+		this.restoring = restored.length > 0;
+		try {
+			await Promise.all(restored.map((item) => this.#refresh(item)));
+		} finally {
+			this.restoring = false;
+		}
+	}
+
+	#persist(): void {
+		if (this.#storage === undefined || this.#disposed) return;
+		const items: SavedUpload[] = this.items.flatMap((item) =>
+			item.documentId === null
+				? []
+				: [{ id: item.documentId, set: item.set, name: item.name, size: item.size }]
+		);
+		try {
+			this.#storage().setItem(this.#storageKey, JSON.stringify({ version: 1, items }));
+		} catch (error) {
+			console.warn('Could not save upload session', error);
+		}
 	}
 
 	itemsIn(set: DocSet): UploadItem[] {
@@ -101,11 +166,10 @@ export class UploadSession {
 
 	/** Repeats the failed step: sends the file again, or resumes following a stored document. */
 	retry(item: UploadItem): void {
-		if (item.status !== 'failed') {
+		if (item.status !== 'failed' || !item.retriable || !this.#tracks(item) || item.busy) {
 			return;
 		}
-		const { document } = item;
-		void (document === null ? this.#upload(item) : this.#follow(item, document));
+		void (item.documentId === null ? this.#upload(item) : this.#refresh(item));
 	}
 
 	/** Changes the document type at once and reverts it if the backend refuses. */
@@ -136,11 +200,11 @@ export class UploadSession {
 		if (!item.removable) {
 			return;
 		}
-		if (item.document !== null) {
+		if (item.documentId !== null) {
 			item.busy = true;
 			item.error = null;
 			try {
-				await this.#api.remove(item.document.id);
+				await this.#api.remove(item.documentId);
 			} catch (error) {
 				const alreadyGone = error instanceof ApiError && error.status === 404;
 				if (!alreadyGone) {
@@ -151,6 +215,7 @@ export class UploadSession {
 			}
 		}
 		this.items = this.items.filter((other) => other !== item);
+		this.#persist();
 	}
 
 	/** Stops polling for every file, e.g. when the page is left. */
@@ -170,6 +235,7 @@ export class UploadSession {
 	}
 
 	async #upload(item: UploadItem): Promise<void> {
+		if (item.file === null || !this.#tracks(item)) return;
 		item.status = 'uploading';
 		item.progress = 0;
 		item.error = null;
@@ -180,11 +246,30 @@ export class UploadSession {
 				item.progress = fraction;
 			});
 		} catch (error) {
-			this.#fail(item, error);
+			if (this.#tracks(item)) this.#fail(item, error);
 			return;
 		}
+		if (!this.#tracks(item)) return;
 		item.document = document;
+		item.documentId = document.id;
+		this.#persist();
 		await this.#follow(item, document);
+	}
+
+	/** The saved id is enough to retry a read even before any metadata request succeeds. */
+	async #refresh(item: UploadItem): Promise<void> {
+		if (item.documentId === null || !this.#tracks(item)) return;
+		item.status = 'parsing';
+		item.error = null;
+		item.retriable = false;
+		try {
+			const document = await this.#api.get(item.documentId);
+			if (!this.#tracks(item)) return;
+			item.document = document;
+			void this.#follow(item, document);
+		} catch (error) {
+			if (this.#tracks(item)) this.#fail(item, error);
+		}
 	}
 
 	/** Re-reads the document every `POLL_INTERVAL_MS` while it is `pending`. */

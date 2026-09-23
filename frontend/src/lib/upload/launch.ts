@@ -18,11 +18,14 @@ export function launchBlocker(items: readonly UploadItem[]): string | null {
 	}
 	const failed = items.find((item) => item.status === 'failed');
 	if (failed) {
-		return `Файл «${failed.file.name}» не загружен: повторите загрузку или удалите его.`;
+		if (failed.documentId !== null) {
+			return `Не удалось получить статус файла «${failed.name}»: повторите запрос или удалите его.`;
+		}
+		return `Файл «${failed.name}» не загружен: повторите загрузку или удалите его.`;
 	}
 	const broken = items.find((item) => (item.document?.blocking_issues ?? 0) > 0);
 	if (broken) {
-		return `В файле «${broken.file.name}» есть блокирующие проблемы разбора: удалите его или загрузите другой.`;
+		return `В файле «${broken.name}» есть блокирующие проблемы разбора: удалите его или загрузите другой.`;
 	}
 	return null;
 }

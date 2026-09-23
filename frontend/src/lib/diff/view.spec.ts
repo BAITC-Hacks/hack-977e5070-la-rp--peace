@@ -104,6 +104,81 @@ describe('CompareView', () => {
 		expect(api.get).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		[7, '«До»', 0],
+		[9, '«После»', 0],
+		[7, '«До»', 1],
+		[9, '«После»', 1]
+	])(
+		'refuses a blocking parse issue in document %i (%s), with %i nodes',
+		async (id, label, count) => {
+			const api = fakeApi({
+				get: vi.fn(async (documentId: number) =>
+					documentId === id
+						? { ...stored(id, 'needs_review'), blocking_issues: 1, node_count: count }
+						: stored(documentId)
+				)
+			});
+			const view = new CompareView(api, 7, 9);
+
+			view.start();
+			await vi.waitFor(() => expect(view.status).toBe('failed'));
+
+			expect(view.error).toContain(`в документе ${label}`);
+			expect(view.error).toContain('блокирующие проблемы разбора');
+			expect(api.nodes).not.toHaveBeenCalled();
+			expect(view.before).toBeNull();
+			expect(view.after).toBeNull();
+		}
+	);
+
+	it('reports both documents when both have blocking issues', async () => {
+		const api = fakeApi({
+			get: vi.fn(async (id: number) => ({
+				...stored(id, 'needs_review'),
+				blocking_issues: 1
+			}))
+		});
+		const view = new CompareView(api, 7, 9);
+
+		view.start();
+		await vi.waitFor(() => expect(view.status).toBe('failed'));
+
+		expect(view.error).toContain('в документах «До» и «После»');
+		expect(api.nodes).not.toHaveBeenCalled();
+	});
+
+	it('allows review warnings when neither document has blocking issues', async () => {
+		const api = fakeApi({
+			get: vi.fn(async (id: number) => ({ ...stored(id, 'needs_review'), other_issues: 2 }))
+		});
+		const view = new CompareView(api, 7, 9);
+
+		view.start();
+		await vi.waitFor(() => expect(view.status).toBe('ready'));
+
+		expect(api.nodes).toHaveBeenCalledTimes(2);
+		expect(view.error).toBeNull();
+	});
+
+	it('can retry after blocking parsing issues are resolved', async () => {
+		const get = vi.fn(async (id: number) => ({
+			...stored(id, 'needs_review'),
+			blocking_issues: 1
+		}));
+		const api = fakeApi({ get });
+		const view = new CompareView(api, 7, 9);
+
+		view.start();
+		await vi.waitFor(() => expect(view.status).toBe('failed'));
+		get.mockImplementation(async (id: number) => stored(id, 'validated'));
+		view.retry();
+		await vi.waitFor(() => expect(view.status).toBe('ready'));
+
+		expect(view.error).toBeNull();
+		expect(api.nodes).toHaveBeenCalledTimes(2);
+	});
+
 	it('shows the backend message with the side that failed, and retries', async () => {
 		const get = vi.fn(async (id: number) => {
 			if (id === 9) {
@@ -153,6 +228,26 @@ describe('CompareView', () => {
 		await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
 
 		await vi.waitFor(() => expect(view.status).toBe('ready'));
+	});
+
+	it('stops polling when parsing finishes with blocking issues', async () => {
+		vi.useFakeTimers();
+		const get = vi.fn(async (id: number) => stored(id, id === 9 ? 'pending' : 'parsed'));
+		const api = fakeApi({ get });
+		const view = new CompareView(api, 7, 9);
+
+		view.start();
+		await vi.waitFor(() => expect(view.status).toBe('pending'));
+		get.mockImplementation(async (id: number) => ({
+			...stored(id, id === 9 ? 'needs_review' : 'parsed'),
+			blocking_issues: id === 9 ? 1 : 0
+		}));
+		await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+		await vi.waitFor(() => expect(view.status).toBe('failed'));
+		await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+
+		expect(api.get).toHaveBeenCalledTimes(4);
+		expect(api.nodes).not.toHaveBeenCalled();
 	});
 
 	it('ignores answers after it was stopped', async () => {
