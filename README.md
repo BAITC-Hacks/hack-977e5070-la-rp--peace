@@ -2,3 +2,7 @@
 Hackathon team repository for la(rp)-peace
 
 # LABUBU
+
+## Team
+
+la(rp)-peace
