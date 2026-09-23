@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import sessionmaker
 
 from la_rp_peace.activities.pipeline import ActivityStage
-from la_rp_peace.api import activities, cascade, collisions, comparisons, documents, entities, sources
+from la_rp_peace.api import activities, cascade, collisions, comparisons, document_diffs, documents, entities, sources
 from la_rp_peace.cascade.pipeline import CascadeStage
 from la_rp_peace.collisions.pipeline import CollisionStage
 from la_rp_peace.config import Settings, get_settings
@@ -123,6 +123,7 @@ def create_app(settings: Settings | None = None, model: ChatModel | None = None)
     app.include_router(collisions.router)
     app.include_router(cascade.router)
     app.include_router(comparisons.router)
+    app.include_router(document_diffs.router)
 
     @app.get("/api/health", tags=["meta"])
     def health() -> dict[str, str]:
