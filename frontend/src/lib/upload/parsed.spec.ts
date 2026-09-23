@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { DocSet, DocumentOut } from '$lib/api/types';
 
-import { parsedDocuments } from './parsed';
+import { comparePair, parsedDocuments } from './parsed';
 
 function item(set: DocSet, id: number, parsed = true) {
 	const document = { id } as DocumentOut;
@@ -28,5 +28,23 @@ describe('parsedDocuments', () => {
 			{ id: 2, set: 'after', name: 'after-2.docx' }
 		]);
 		expect(parsedDocuments([{ ...item('before', 1), document: null }])).toEqual([]);
+	});
+});
+
+describe('comparePair', () => {
+	it('pairs the first parsed «До» with the first parsed «После»', () => {
+		const documents = parsedDocuments([
+			item('regulatory', 5),
+			item('after', 2),
+			item('before', 1),
+			item('after', 3)
+		]);
+
+		expect(comparePair(documents)).toEqual({ before: 1, after: 2 });
+	});
+
+	it('gives null until both sides are parsed', () => {
+		expect(comparePair(parsedDocuments([item('before', 1), item('after', 2, false)]))).toBeNull();
+		expect(comparePair([])).toBeNull();
 	});
 });

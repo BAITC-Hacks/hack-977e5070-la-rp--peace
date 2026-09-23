@@ -74,7 +74,7 @@
 			>
 				Начать анализ
 			</button>
-			<p id={hintId} class="text-sm text-muted">{blocker}</p>
+			<p id={hintId} class="text-sm wrap-anywhere text-muted">{blocker}</p>
 		{:else}
 			<a
 				href={resolve('/status')}

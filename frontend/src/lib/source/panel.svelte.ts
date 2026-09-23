@@ -1,5 +1,6 @@
 import { ApiError } from '$lib/api/errors';
 import type { SourceRef, SourcesApi } from '$lib/api/sources';
+import { compareHref } from '$lib/diff/anchor';
 
 /** One citation of a finding: a document node and the exact words cited from it. */
 export interface SourceTarget {
@@ -27,6 +28,12 @@ function messageOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+/** The «До» and «После» documents the Word view compares. */
+export interface ComparePair {
+	before: number;
+	after: number;
+}
+
 /** The source panel: the citations of one finding, browsed one at a time. */
 export class SourcePanelState {
 	/** Citations being browsed; empty while the panel is closed. */
@@ -38,11 +45,14 @@ export class SourcePanelState {
 	/** Whether the failed lookup can succeed if repeated (network or server error). */
 	retriable = $state(false);
 	readonly #api: SourcesApi;
+	readonly #compare: () => ComparePair | null;
 	/** Bumped by every lookup and by `close`, so an answer that arrives too late is dropped. */
 	#request = 0;
 
-	constructor(api: SourcesApi) {
+	/** `compare` gives the documents of the Word view; without them the panel does not link to it. */
+	constructor(api: SourcesApi, compare: () => ComparePair | null = () => null) {
 		this.#api = api;
+		this.#compare = compare;
 	}
 
 	get isOpen(): boolean {
@@ -64,6 +74,17 @@ export class SourcePanelState {
 	/** Download link of the original file of the shown source. */
 	get downloadUrl(): string | null {
 		return this.source && this.#api.fileUrl(this.source.document_id);
+	}
+
+	/** Link to the shown source in the Word view, when it belongs to one of the compared documents. */
+	get compareHref(): ReturnType<typeof compareHref> | null {
+		const compare = this.#compare();
+		const { source } = this;
+		if (compare === null || source === null) {
+			return null;
+		}
+		const inPair = source.document_id === compare.before || source.document_id === compare.after;
+		return inPair ? compareHref(compare.before, compare.after, source.node_id) : null;
 	}
 
 	/** Shows the citation at `index` of `targets`; an empty list leaves the panel as it is. */

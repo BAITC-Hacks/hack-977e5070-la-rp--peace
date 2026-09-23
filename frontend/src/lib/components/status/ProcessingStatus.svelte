@@ -65,7 +65,7 @@
 				<!-- Rows hold no state of their own, so their position is all that identifies them. -->
 				{#each rows as row, index (index)}
 					<tr>
-						<th scope="row" class="px-3 py-2.5 align-top font-normal break-words">{row.label}</th>
+						<th scope="row" class="px-3 py-2.5 align-top font-normal wrap-anywhere">{row.label}</th>
 						{#each STAGES as stage (stage.id)}
 							<td class="px-3 py-2.5 align-top"><StageCell state={row.stages[stage.id]} /></td>
 						{/each}
@@ -89,7 +89,9 @@
 			<p class="font-semibold">Ошибка обработки</p>
 			<ul class="grid gap-1">
 				{#each errors as error, index (index)}
-					<li><span class="font-medium">{error.label}</span> — {error.message}</li>
+					<li class="wrap-anywhere">
+						<span class="font-medium">{error.label}</span> — {error.message}
+					</li>
 				{/each}
 			</ul>
 		</div>

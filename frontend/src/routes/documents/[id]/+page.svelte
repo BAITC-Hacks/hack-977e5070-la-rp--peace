@@ -11,7 +11,8 @@
 	import { DOC_SET_LABELS, PARSE_STATUS_LABELS } from '$lib/document/labels';
 	import { TreeState } from '$lib/document/tree-state.svelte';
 	import { DocumentView } from '$lib/document/view.svelte';
-	import { SourcePanelState } from '$lib/source/panel.svelte';
+	import { type ComparePair, SourcePanelState } from '$lib/source/panel.svelte';
+	import { uploadSession } from '$lib/upload/current';
 	import { formatSize } from '$lib/upload/files';
 
 	import type { PageProps } from './$types';
@@ -20,8 +21,24 @@
 
 	const view = $derived(new DocumentView(documentApi, data.id));
 	const tree = $derived(view.details && new TreeState(view.details.nodes));
-	const panel = new SourcePanelState(sourcesApi);
 	const anchors = $derived(new Map(view.details?.nodes.map((node) => [node.id, node.anchor])));
+
+	/** The Word view compares one «До» with one «После»; with more of either it is unclear which. */
+	const comparePair: ComparePair | null = $derived.by(() => {
+		const [before, ...moreBefore] = parsedIds('before');
+		const [after, ...moreAfter] = parsedIds('after');
+		return before === undefined || after === undefined || moreBefore.length + moreAfter.length > 0
+			? null
+			: { before, after };
+	});
+
+	function parsedIds(set: 'before' | 'after'): number[] {
+		return uploadSession
+			.itemsIn(set)
+			.flatMap((item) => (item.parsed && item.document !== null ? [item.document.id] : []));
+	}
+
+	const panel = new SourcePanelState(sourcesApi, () => comparePair);
 
 	const STATUS_CLASSES: Record<ParseStatus, string> = {
 		pending: 'bg-neutral-soft text-neutral',
@@ -77,7 +94,7 @@
 				<p class="text-xs font-medium tracking-[0.07em] text-muted uppercase">
 					{doc.set ? `Документ ${DOC_SET_LABELS[doc.set]}` : 'Документ'}
 				</p>
-				<h1 class="text-2xl font-semibold break-words">{doc.file_name}</h1>
+				<h1 class="text-2xl font-semibold wrap-anywhere">{doc.file_name}</h1>
 				<p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
 					<span
 						class={['rounded px-2 py-0.5 text-xs font-semibold', STATUS_CLASSES[doc.parse_status]]}
