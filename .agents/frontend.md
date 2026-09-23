@@ -16,9 +16,9 @@ reorganised unit, lost function, duplicated function, correct sources).
 | Language | TypeScript, `strict: true` |
 | Rendering | `adapter-static`, SPA mode (`ssr = false`) — the Python backend serves the API |
 | Styling | Tailwind CSS |
-| Package manager | `pnpm` (lockfile committed) |
+| Package manager | `pnpm` via corepack, version pinned in `package.json` `packageManager` (lockfile committed) |
 | Checks | `svelte-check`, ESLint (`eslint-plugin-svelte`), Prettier (`prettier-plugin-svelte`) |
-| Tests | Vitest + `@testing-library/svelte` for components with logic |
+| Tests | Vitest: logic in `.ts` modules, unit-tested in Node; components with `vitest-browser-svelte` in Chromium (what `sv` 0.17 scaffolds) |
 | UI language | Russian (all visible labels); code and identifiers in English |
 
 Scaffold with `pnpm dlx sv create frontend` (template *minimal*, TypeScript, add-ons: tailwind,
