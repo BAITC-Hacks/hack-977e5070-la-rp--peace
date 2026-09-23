@@ -23,6 +23,8 @@ class Settings(BaseSettings):
         profile_max_chars: Documents rendered longer than this are sampled for the model.
         profile_retries: Corrected answers requested after the first one.
         parser_workers: Documents parsed in parallel.
+        activity_block_max_chars: Size limit of one stage 3 block shown to the model.
+        activity_retries: Corrected stage 3 answers requested per block after the first.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -38,6 +40,8 @@ class Settings(BaseSettings):
     profile_max_chars: int = Field(default=150_000, ge=1_000)
     profile_retries: int = Field(default=2, ge=0)
     parser_workers: int = Field(default=2, ge=1)
+    activity_block_max_chars: int = Field(default=12_000, ge=1_000)
+    activity_retries: int = Field(default=2, ge=0)
 
     @field_validator("openai_reasoning_effort", mode="before")
     @classmethod

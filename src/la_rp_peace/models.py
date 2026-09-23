@@ -52,6 +52,7 @@ class Document(Base):
     uploaded_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
     doc_set: Mapped[str | None] = mapped_column(Text)
     entities_status: Mapped[str] = mapped_column(Text, default="not_started")
+    activities_status: Mapped[str] = mapped_column(Text, default="not_started")
 
 
 class DocumentFile(Base):
@@ -165,6 +166,81 @@ class EntityIssue(Base):
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
     entity_id: Mapped[int | None] = mapped_column(Integer)
     relation_id: Mapped[int | None] = mapped_column(Integer)
+    issue_type: Mapped[str] = mapped_column(Text)
+    message: Mapped[str] = mapped_column(Text)
+    is_blocking: Mapped[int] = mapped_column(Integer, default=0)
+    resolved_at: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
+
+
+class ActivityRecord(Base):
+    """One standalone provision assigned to entities of a document (stage 3)."""
+
+    __tablename__ = "activity_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    record_type: Mapped[str] = mapped_column(Text)
+    formulation: Mapped[str] = mapped_column(Text)
+    condition: Mapped[str | None] = mapped_column(Text)
+    deadline: Mapped[str | None] = mapped_column(Text)
+    periodicity: Mapped[str | None] = mapped_column(Text)
+    review_status: Mapped[str] = mapped_column(Text, default="pending")
+
+
+class ActivityBinding(Base):
+    """An entity (or an unresolved designation) a record is assigned to."""
+
+    __tablename__ = "activity_bindings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    record_id: Mapped[int] = mapped_column(Integer)
+    entity_id: Mapped[int | None] = mapped_column(Integer)
+    designation: Mapped[str] = mapped_column(Text)
+    participation: Mapped[str] = mapped_column(Text)
+    condition: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+
+
+class ActivitySource(Base):
+    """A verbatim quote from a node that supports a record or a binding."""
+
+    __tablename__ = "activity_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    record_id: Mapped[int | None] = mapped_column(Integer)
+    binding_id: Mapped[int | None] = mapped_column(Integer)
+    node_id: Mapped[int] = mapped_column(Integer)
+    quote: Mapped[str] = mapped_column(Text)
+    quote_start: Mapped[int] = mapped_column(Integer)
+    quote_end: Mapped[int] = mapped_column(Integer)
+    supports: Mapped[str] = mapped_column(Text)
+
+
+class ActivityBlock(Base):
+    """Processing mark of one stage 3 block."""
+
+    __tablename__ = "activity_blocks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    node_id: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(Text)
+    message: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer)
+
+
+class ActivityIssue(Base):
+    """A stage 3 problem, optionally tied to a record or a binding."""
+
+    __tablename__ = "activity_issues"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    record_id: Mapped[int | None] = mapped_column(Integer)
+    binding_id: Mapped[int | None] = mapped_column(Integer)
     issue_type: Mapped[str] = mapped_column(Text)
     message: Mapped[str] = mapped_column(Text)
     is_blocking: Mapped[int] = mapped_column(Integer, default=0)
