@@ -22,6 +22,17 @@ def _insert(connection: Connection, sql: str, **values: Any) -> int:
     return new_id
 
 
+RECORD = (
+    "INSERT INTO activity_records (document_id, block_node_id, entity_id, designation, record_type, formulation, "
+    "specificity, participation, participant_designation, note) "
+    "VALUES (:d, :n, :e, 'Отдел', 'function', 'Отдел проверяет', 'specific', :p, 'Отдел', :note)"
+)
+SOURCE = (
+    "INSERT INTO activity_sources (document_id, record_id, node_id, quote, quote_start, quote_end, supports) "
+    "VALUES (:d, :r, :n, 'проверяет', 11, 20, '[\"formulation\"]')"
+)
+
+
 def _document(connection: Connection) -> dict[str, int]:
     """A document with one node, one entity and one record; returns their ids."""
     document = _insert(
@@ -41,31 +52,14 @@ def _document(connection: Connection) -> dict[str, int]:
         "INSERT INTO entities (document_id, parent_status, name, entity_type) VALUES (:d, 'unknown', 'Отдел', 'отдел')",
         d=document,
     )
-    record = _insert(
-        connection,
-        "INSERT INTO activity_records (document_id, record_type, formulation) "
-        "VALUES (:d, 'function', 'Отдел проверяет')",
-        d=document,
-    )
+    record = _insert(connection, RECORD, d=document, n=node, e=entity, p="individual", note=None)
     return {"document": document, "node": node, "entity": entity, "record": record}
-
-
-BINDING = (
-    "INSERT INTO activity_bindings (document_id, record_id, entity_id, designation, participation, note) "
-    "VALUES (:d, :r, :e, 'Отдел', 'individual', :note)"
-)
-SOURCE = (
-    "INSERT INTO activity_sources "
-    "(document_id, record_id, binding_id, node_id, quote, quote_start, quote_end, supports) "
-    "VALUES (:d, :r, :b, :n, 'проверяет', 11, 20, '[\"formulation\"]')"
-)
 
 
 def test_a_consistent_document_is_accepted_and_cascades(engine: Engine) -> None:
     with engine.begin() as connection:
         ids = _document(connection)
-        bound = _insert(connection, BINDING, d=ids["document"], r=ids["record"], e=ids["entity"], note=None)
-        _insert(connection, SOURCE, d=ids["document"], r=None, b=bound, n=ids["node"])
+        _insert(connection, SOURCE, d=ids["document"], r=ids["record"], n=ids["node"])
         connection.execute(text("DELETE FROM documents"))
         left = connection.execute(
             text("SELECT (SELECT count(*) FROM activity_records) + (SELECT count(*) FROM activity_sources)"),
@@ -76,41 +70,30 @@ def test_a_consistent_document_is_accepted_and_cascades(engine: Engine) -> None:
 
 @pytest.mark.parametrize(
     ("statement", "owner"),
-    [
-        (BINDING, "entity"),
-        (BINDING, "record"),
-        (SOURCE, "node"),
-        (SOURCE, "record"),
-    ],
+    [(RECORD, "entity"), (RECORD, "node"), (SOURCE, "node"), (SOURCE, "record")],
 )
 def test_references_to_another_document_are_rejected(engine: Engine, statement: str, owner: str) -> None:
     with engine.begin() as connection:
         mine, foreign = _document(connection), _document(connection)
-    values = {
-        "d": mine["document"],
-        "r": mine["record"],
-        "e": mine["entity"],
-        "note": None,
-        "b": None,
-        "n": mine["node"],
-    }
+    values: dict[str, Any] = {"d": mine["document"], "r": mine["record"], "e": mine["entity"], "n": mine["node"]}
+    values |= {"p": "individual", "note": None}
     values[{"entity": "e", "record": "r", "node": "n"}[owner]] = foreign[owner]
 
     with pytest.raises(IntegrityError), engine.begin() as connection:
         connection.execute(text(statement), values)
 
 
-def test_unresolved_binding_needs_a_note_and_a_source_one_owner(engine: Engine) -> None:
+def test_unresolved_record_needs_a_note_and_known_participation(engine: Engine) -> None:
     with engine.begin() as connection:
         ids = _document(connection)
-    base = {"d": ids["document"], "r": ids["record"]}
+    base = {"d": ids["document"], "n": ids["node"], "e": None}
 
     with pytest.raises(IntegrityError), engine.begin() as connection:
-        connection.execute(text(BINDING), base | {"e": None, "note": None})
+        connection.execute(text(RECORD), base | {"p": "individual", "note": None})
     with pytest.raises(IntegrityError), engine.begin() as connection:
-        connection.execute(text(SOURCE), base | {"b": None, "r": None, "n": ids["node"]})
+        connection.execute(text(RECORD), base | {"p": "together", "note": "не в реестре"})
     with engine.begin() as connection:
-        connection.execute(text(BINDING), base | {"e": None, "note": "Исполнитель не в реестре"})
+        connection.execute(text(RECORD), base | {"p": "each", "note": "Состав группы не раскрыт"})
 
 
 def test_activities_status_is_checked(engine: Engine) -> None:

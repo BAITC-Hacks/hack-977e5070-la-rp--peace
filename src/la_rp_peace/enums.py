@@ -138,12 +138,21 @@ class ActivityType(StrEnum):
 
 
 class Participation(StrEnum):
-    """How an entity takes part in a record together with the record's other bindings."""
+    """How the participants of one provision share it (each keeps a record of their own)."""
 
     INDIVIDUAL = "individual"
+    EACH = "each"
     JOINT = "joint"
     ALTERNATIVE = "alternative"
     UNCLEAR = "unclear"
+
+
+class Specificity(StrEnum):
+    """Whether a record's content is disclosed; does not replace its type."""
+
+    SPECIFIC = "specific"
+    GENERALIZED = "generalized"
+    NEEDS_CLARIFICATION = "needs_clarification"
 
 
 class ActivityIssueType(StrEnum):

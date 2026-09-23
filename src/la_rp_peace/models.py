@@ -180,38 +180,30 @@ class ActivityRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    block_node_id: Mapped[int] = mapped_column(Integer)
+    entity_id: Mapped[int | None] = mapped_column(Integer)
+    designation: Mapped[str] = mapped_column(Text)
     record_type: Mapped[str] = mapped_column(Text)
     formulation: Mapped[str] = mapped_column(Text)
+    specificity: Mapped[str] = mapped_column(Text)
+    participation: Mapped[str] = mapped_column(Text)
+    participant_designation: Mapped[str] = mapped_column(Text)
+    participant_entity_ids: Mapped[str] = mapped_column(Text, default="[]")
     condition: Mapped[str | None] = mapped_column(Text)
     deadline: Mapped[str | None] = mapped_column(Text)
     periodicity: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
     review_status: Mapped[str] = mapped_column(Text, default="pending")
 
 
-class ActivityBinding(Base):
-    """An entity (or an unresolved designation) a record is assigned to."""
-
-    __tablename__ = "activity_bindings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
-    record_id: Mapped[int] = mapped_column(Integer)
-    entity_id: Mapped[int | None] = mapped_column(Integer)
-    designation: Mapped[str] = mapped_column(Text)
-    participation: Mapped[str] = mapped_column(Text)
-    condition: Mapped[str | None] = mapped_column(Text)
-    note: Mapped[str | None] = mapped_column(Text)
-
-
 class ActivitySource(Base):
-    """A verbatim quote from a node that supports a record or a binding."""
+    """A verbatim quote from a node that supports a record."""
 
     __tablename__ = "activity_sources"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
-    record_id: Mapped[int | None] = mapped_column(Integer)
-    binding_id: Mapped[int | None] = mapped_column(Integer)
+    record_id: Mapped[int] = mapped_column(Integer)
     node_id: Mapped[int] = mapped_column(Integer)
     quote: Mapped[str] = mapped_column(Text)
     quote_start: Mapped[int] = mapped_column(Integer)
@@ -233,14 +225,13 @@ class ActivityBlock(Base):
 
 
 class ActivityIssue(Base):
-    """A stage 3 problem, optionally tied to a record or a binding."""
+    """A stage 3 problem, optionally tied to a record."""
 
     __tablename__ = "activity_issues"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
     record_id: Mapped[int | None] = mapped_column(Integer)
-    binding_id: Mapped[int | None] = mapped_column(Integer)
     issue_type: Mapped[str] = mapped_column(Text)
     message: Mapped[str] = mapped_column(Text)
     is_blocking: Mapped[int] = mapped_column(Integer, default=0)

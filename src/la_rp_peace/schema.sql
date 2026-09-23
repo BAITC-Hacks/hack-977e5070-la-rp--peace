@@ -252,70 +252,69 @@ CREATE TABLE entity_issues (
 ) STRICT;
 
 -- Stage 3 (methodology/03_activity_extraction.md): what is assigned to the entities of ONE
--- document. Composite keys (document_id, id) keep records, bindings, entities, sources and
--- nodes inside the same document. Rows are replaced as a whole on every stage 3 run.
+-- document. One record = one provision for ONE entity: a provision of several participants is
+-- stored once per participant, linked by participation, participant_designation and
+-- participant_entity_ids. Composite keys (document_id, id) keep records, entities, sources and
+-- nodes inside the same document.
 CREATE TABLE activity_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    -- The planned block whose answer produced the record; a re-run of the block replaces its records.
+    block_node_id INTEGER NOT NULL,
+    -- NULL = unresolved role or undisclosed remainder of a group; note explains what to clarify.
+    entity_id INTEGER,
+    -- How the text names this participant, e.g. «уполномоченный им работник».
+    designation TEXT NOT NULL CHECK (trim(designation) <> ''),
     record_type TEXT NOT NULL CHECK (record_type IN (
         'goal', 'task', 'function', 'duty', 'right', 'prohibition', 'other'
     )),
     -- Full standalone wording (intro phrase + sub-item); the verbatim words live in activity_sources.
     formulation TEXT NOT NULL CHECK (trim(formulation) <> ''),
+    specificity TEXT NOT NULL CHECK (specificity IN ('specific', 'generalized', 'needs_clarification')),
+    participation TEXT NOT NULL CHECK (participation IN ('individual', 'each', 'joint', 'alternative', 'unclear')),
+    -- Original wording of the participant circle, e.g. «Главный аудитор или уполномоченный им работник».
+    participant_designation TEXT NOT NULL CHECK (trim(participant_designation) <> ''),
+    -- JSON array of the OTHER known participants' entity ids (same document, checked by the backend).
+    participant_entity_ids TEXT NOT NULL DEFAULT '[]' CHECK (
+        CASE WHEN json_valid(participant_entity_ids) THEN json_type(participant_entity_ids) = 'array' ELSE 0 END
+    ),
     -- NULL when the document does not state it; never invented.
     condition TEXT CHECK (condition IS NULL OR trim(condition) <> ''),
     deadline TEXT CHECK (deadline IS NULL OR trim(deadline) <> ''),
     periodicity TEXT CHECK (periodicity IS NULL OR trim(periodicity) <> ''),
+    note TEXT CHECK (note IS NULL OR trim(note) <> ''),
     review_status TEXT NOT NULL DEFAULT 'pending'
         CHECK (review_status IN ('pending', 'checked', 'needs_review')),
-    CONSTRAINT activity_records_document_identity UNIQUE (document_id, id)
-) STRICT;
-
--- Who a record is assigned to. entity_id NULL = executor not in the stage 2 registry: the
--- original designation and a note for the reviewer are kept instead of an invented id.
-CREATE TABLE activity_bindings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
-    record_id INTEGER NOT NULL,
-    entity_id INTEGER,
-    designation TEXT NOT NULL CHECK (trim(designation) <> ''),
-    participation TEXT NOT NULL CHECK (participation IN ('individual', 'joint', 'alternative', 'unclear')),
-    -- Condition of this participant, e.g. authority or appointment («уполномоченный им работник»).
-    condition TEXT CHECK (condition IS NULL OR trim(condition) <> ''),
-    note TEXT CHECK (note IS NULL OR trim(note) <> ''),
-    CONSTRAINT activity_bindings_document_identity UNIQUE (document_id, id),
-    CONSTRAINT activity_bindings_unresolved_needs_note CHECK (entity_id IS NOT NULL OR note IS NOT NULL),
-    CONSTRAINT activity_bindings_record_same_document
-        FOREIGN KEY (document_id, record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE,
-    CONSTRAINT activity_bindings_entity_same_document
+    CONSTRAINT activity_records_document_identity UNIQUE (document_id, id),
+    CONSTRAINT activity_records_unresolved_needs_note CHECK (entity_id IS NOT NULL OR note IS NOT NULL),
+    CONSTRAINT activity_records_block_same_document
+        FOREIGN KEY (document_id, block_node_id) REFERENCES document_nodes (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT activity_records_entity_same_document
         FOREIGN KEY (document_id, entity_id) REFERENCES entities (document_id, id) ON DELETE CASCADE
 ) STRICT;
 
--- Verbatim evidence of a record or of a binding: quote_start/quote_end index document_nodes.text.
+-- Verbatim evidence of a record: quote_start/quote_end index document_nodes.text of node_id.
 CREATE TABLE activity_sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
-    record_id INTEGER,
-    binding_id INTEGER,
+    record_id INTEGER NOT NULL,
     node_id INTEGER NOT NULL,
     quote TEXT NOT NULL CHECK (trim(quote) <> ''),
     quote_start INTEGER NOT NULL CHECK (quote_start >= 0),
     quote_end INTEGER NOT NULL,
-    -- JSON array: formulation, type, condition, deadline, periodicity (record); binding, condition (binding).
+    -- JSON array: formulation, type, condition, deadline, periodicity, participation, specificity,
+    -- entity, membership.
     supports TEXT NOT NULL CHECK (
         CASE WHEN json_valid(supports) THEN json_type(supports) = 'array' ELSE 0 END
     ),
     CONSTRAINT activity_sources_range CHECK (quote_end > quote_start),
-    CONSTRAINT activity_sources_one_owner CHECK ((record_id IS NULL) <> (binding_id IS NULL)),
     CONSTRAINT activity_sources_record_same_document
         FOREIGN KEY (document_id, record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE,
-    CONSTRAINT activity_sources_binding_same_document
-        FOREIGN KEY (document_id, binding_id) REFERENCES activity_bindings (document_id, id) ON DELETE CASCADE,
     CONSTRAINT activity_sources_node_same_document
         FOREIGN KEY (document_id, node_id) REFERENCES document_nodes (document_id, id) ON DELETE CASCADE
 ) STRICT;
 
--- Processing mark for every planned block: a failed request is never "none".
+-- Processing mark of every planned block in the latest run: a failed request is never "none".
 CREATE TABLE activity_blocks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
@@ -331,7 +330,6 @@ CREATE TABLE activity_issues (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
     record_id INTEGER,
-    binding_id INTEGER,
     issue_type TEXT NOT NULL CHECK (issue_type IN (
         'unclear_type', 'unresolved_entity', 'unclear_participation', 'unclear', 'block_failed', 'other'
     )),
@@ -340,9 +338,7 @@ CREATE TABLE activity_issues (
     resolved_at TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     CONSTRAINT activity_issues_record_same_document
-        FOREIGN KEY (document_id, record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE,
-    CONSTRAINT activity_issues_binding_same_document
-        FOREIGN KEY (document_id, binding_id) REFERENCES activity_bindings (document_id, id) ON DELETE CASCADE
+        FOREIGN KEY (document_id, record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE
 ) STRICT;
 
 COMMIT;

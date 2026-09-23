@@ -1,4 +1,4 @@
-"""Stage 3 results: activity records with bindings and sources, the processing report, re-runs."""
+"""Stage 3 results: activity records with participants and sources, the processing report, re-runs."""
 
 import json
 from collections import defaultdict
@@ -18,10 +18,10 @@ from la_rp_peace.enums import (
     BlockStatus,
     Participation,
     ReviewStatus,
+    Specificity,
 )
 from la_rp_peace.ingestion.pipeline import ParsingQueue
 from la_rp_peace.models import (
-    ActivityBinding,
     ActivityBlock,
     ActivityIssue,
     ActivityRecord,
@@ -47,30 +47,32 @@ class ActivitySourceOut(BaseModel):
     supports: list[str]
 
 
-class ActivityBindingOut(BaseModel):
-    """An entity a record is assigned to; ``entity_id`` None means not in the registry."""
+class ParticipantOut(BaseModel):
+    """Another known participant of the same provision."""
 
-    id: int
-    entity_id: int | None
+    entity_id: int
     entity_name: str | None
-    designation: str
-    participation: Participation
-    condition: str | None
-    note: str | None
-    sources: list[ActivitySourceOut]
 
 
 class ActivityRecordOut(BaseModel):
-    """One provision: type, full formulation, condition, deadline, periodicity, bindings, sources."""
+    """One provision for one entity; ``entity_id`` None is an unresolved role or group remainder."""
 
     id: int
+    block_node_id: int
+    entity_id: int | None
+    entity_name: str | None
+    designation: str
     record_type: ActivityType
     formulation: str
+    specificity: Specificity
+    participation: Participation
+    participant_designation: str
+    other_participants: list[ParticipantOut]
     condition: str | None
     deadline: str | None
     periodicity: str | None
+    note: str | None
     review_status: ReviewStatus
-    bindings: list[ActivityBindingOut]
     sources: list[ActivitySourceOut]
 
 
@@ -89,7 +91,6 @@ class ActivityIssueOut(BaseModel):
 
     id: int
     record_id: int | None
-    binding_id: int | None
     issue_type: ActivityIssueType
     message: str
     is_blocking: bool
@@ -139,57 +140,46 @@ def _source_out(source: ActivitySource, places: dict[int, NodePlace]) -> Activit
     )
 
 
-def _binding_out(
-    binding: ActivityBinding, names: dict[int, str], sources: list[ActivitySourceOut]
-) -> ActivityBindingOut:
-    return ActivityBindingOut(
-        id=binding.id,
-        entity_id=binding.entity_id,
-        entity_name=names.get(binding.entity_id) if binding.entity_id is not None else None,
-        designation=binding.designation,
-        participation=Participation(binding.participation),
-        condition=binding.condition,
-        note=binding.note,
+def _record_out(record: ActivityRecord, names: dict[int, str], sources: list[ActivitySourceOut]) -> ActivityRecordOut:
+    others: list[int] = json.loads(record.participant_entity_ids)
+    return ActivityRecordOut(
+        id=record.id,
+        block_node_id=record.block_node_id,
+        entity_id=record.entity_id,
+        entity_name=names.get(record.entity_id) if record.entity_id is not None else None,
+        designation=record.designation,
+        record_type=ActivityType(record.record_type),
+        formulation=record.formulation,
+        specificity=Specificity(record.specificity),
+        participation=Participation(record.participation),
+        participant_designation=record.participant_designation,
+        other_participants=[ParticipantOut(entity_id=other, entity_name=names.get(other)) for other in others],
+        condition=record.condition,
+        deadline=record.deadline,
+        periodicity=record.periodicity,
+        note=record.note,
+        review_status=ReviewStatus(record.review_status),
         sources=sources,
     )
 
 
 @router.get("/{document_id}/activities", response_model=list[ActivityRecordOut])
 def list_activities(session: SessionDep, document_id: int) -> list[ActivityRecordOut]:
-    """Return the document's activity records in document order, with bindings and resolved sources."""
+    """Return the document's records (one per entity) with participants and resolved sources."""
     places = _places(session, _document_or_404(session, document_id))
     names = dict(
-        session.execute(select(Entity.id, Entity.name).where(Entity.document_id == document_id)).tuples().all()
+        session.execute(select(Entity.id, Entity.name).where(Entity.document_id == document_id)).tuples().all(),
     )
-    by_record: defaultdict[int, list[ActivitySourceOut]] = defaultdict(list)
-    by_binding: defaultdict[int, list[ActivitySourceOut]] = defaultdict(list)
-    for source in session.scalars(select(ActivitySource).where(ActivitySource.document_id == document_id)):
-        if source.record_id is not None:
-            by_record[source.record_id].append(_source_out(source, places))
-        elif source.binding_id is not None:
-            by_binding[source.binding_id].append(_source_out(source, places))
-    bindings: defaultdict[int, list[ActivityBindingOut]] = defaultdict(list)
-    for binding in session.scalars(
-        select(ActivityBinding).where(ActivityBinding.document_id == document_id).order_by(ActivityBinding.id),
-    ):
-        bindings[binding.record_id].append(_binding_out(binding, names, by_binding[binding.id]))
+    sources: defaultdict[int, list[ActivitySourceOut]] = defaultdict(list)
+    query = select(ActivitySource).where(ActivitySource.document_id == document_id).order_by(ActivitySource.id)
+    for source in session.scalars(query):
+        sources[source.record_id].append(_source_out(source, places))
     records = session.scalars(
-        select(ActivityRecord).where(ActivityRecord.document_id == document_id).order_by(ActivityRecord.id),
+        select(ActivityRecord)
+        .where(ActivityRecord.document_id == document_id)
+        .order_by(ActivityRecord.block_node_id, ActivityRecord.id),
     )
-    return [
-        ActivityRecordOut(
-            id=record.id,
-            record_type=ActivityType(record.record_type),
-            formulation=record.formulation,
-            condition=record.condition,
-            deadline=record.deadline,
-            periodicity=record.periodicity,
-            review_status=ReviewStatus(record.review_status),
-            bindings=bindings[record.id],
-            sources=by_record[record.id],
-        )
-        for record in records
-    ]
+    return [_record_out(record, names, sources[record.id]) for record in records]
 
 
 @router.get("/{document_id}/activity-report", response_model=ActivityReportOut)
@@ -222,7 +212,6 @@ def activity_report(session: SessionDep, document_id: int) -> ActivityReportOut:
             ActivityIssueOut(
                 id=issue.id,
                 record_id=issue.record_id,
-                binding_id=issue.binding_id,
                 issue_type=ActivityIssueType(issue.issue_type),
                 message=issue.message,
                 is_blocking=bool(issue.is_blocking),
