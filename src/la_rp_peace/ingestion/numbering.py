@@ -58,6 +58,45 @@ def is_successor(candidate: Number, last: Number | None) -> bool:
     return any(candidate == (*last[:depth], last[depth] + 1) for depth in range(len(last)))
 
 
+def split_glued(text: str, last: Number | None) -> tuple[list[str], Number | None]:
+    """Split clauses that were glued onto the end of a paragraph.
+
+    Args:
+        text: Normalised paragraph text.
+        last: Number of the clause seen before this text.
+
+    Returns:
+        The pieces in order, and the last clause number seen once the text is consumed.
+    """
+    last = leading_number(text) or last
+    pieces: list[str] = []
+    start = 0
+    for match in _GLUED_NUMBER.finditer(text):
+        candidate = tuple(int(part) for part in match.group("num").split("."))
+        if is_successor(candidate, last):
+            pieces.append(text[start : match.start()].strip())
+            start = match.start("num")
+            last = candidate
+    pieces.append(text[start:].strip())
+    return [piece for piece in pieces if piece], last
+
+
+def item_letter(text: str) -> str | None:
+    """Return the letter of a lettered list item («б. текст» → «б»), else None."""
+    match = _LETTER_ITEM.match(text)
+    return None if match is None else match.group("letter")
+
+
+def starts_dash_item(text: str) -> bool:
+    """Tell whether text opens a dash («–») list item."""
+    return _DASH_ITEM.match(text) is not None
+
+
+def is_toc_marker(text: str) -> bool:
+    """Tell whether text is a table-of-contents heading."""
+    return text.casefold() in _TOC_MARKERS
+
+
 def _is_heading_style(style: str | None) -> bool:
     if style is None:
         return False
@@ -80,21 +119,9 @@ class _TreeBuilder:
         self._child_counts: defaultdict[int | None, int] = defaultdict(int)
 
     def add_block(self, block: Block) -> None:
-        for piece in self._split_glued(block.text):
+        pieces, _ = split_glued(block.text, self._last_number)
+        for piece in pieces:
             self._add_piece(piece, block)
-
-    def _split_glued(self, text: str) -> list[str]:
-        last = leading_number(text) or self._last_number
-        pieces: list[str] = []
-        start = 0
-        for match in _GLUED_NUMBER.finditer(text):
-            candidate = tuple(int(part) for part in match.group("num").split("."))
-            if is_successor(candidate, last):
-                pieces.append(text[start : match.start()].strip())
-                start = match.start("num")
-                last = candidate
-        pieces.append(text[start:].strip())
-        return [piece for piece in pieces if piece]
 
     def _add_piece(self, text: str, block: Block) -> None:
         number = leading_number(text)
@@ -178,7 +205,7 @@ def build_clauses(blocks: Iterable[Block]) -> list[ParsedClause]:
     for block in blocks:
         if not block.text:
             continue
-        if block.text.casefold() in _TOC_MARKERS:
+        if is_toc_marker(block.text):
             in_toc = True
             continue
         if in_toc and _TOC_ENTRY.search(block.text):

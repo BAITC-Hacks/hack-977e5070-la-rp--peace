@@ -65,9 +65,7 @@ def detect_format(filename: str, data: bytes) -> DocFormat:
 def _extract(doc_format: DocFormat, data: bytes) -> tuple[list[ParsedClause], str | None]:
     if doc_format is DocFormat.XLSX:
         return read_xlsx(data), None
-    if doc_format is DocFormat.PDF:
-        return build_clauses(read_pdf(data)), None
-    blocks, title = read_docx(data)
+    blocks, title = read_pdf(data) if doc_format is DocFormat.PDF else read_docx(data)
     return build_clauses(blocks), title
 
 
