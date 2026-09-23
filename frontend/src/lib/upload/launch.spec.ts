@@ -1,15 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import type { AnalysesApi } from '$lib/api/client';
-import { ApiError } from '$lib/api/errors';
 import type { DocSet, DocumentOut } from '$lib/api/types';
 
-import {
-	AnalysisLauncher,
-	analysisDocumentIds,
-	analysisName,
-	launchBlocker
-} from './launch.svelte';
+import { launchBlocker } from './launch';
 import { UploadItem, type UploadStatus } from './session.svelte';
 
 function document(id: number, overrides: Partial<DocumentOut> = {}): DocumentOut {
@@ -65,13 +58,9 @@ describe('launchBlocker', () => {
 		);
 	});
 
-	it('waits while any file is uploading or parsing', () => {
-		expect(launchBlocker([...ready(), item('benchmark', 'parsing', 3)])).toBe(
-			'Дождитесь окончания разбора.'
-		);
-		expect(launchBlocker([item('before', 'uploading', 1), item('after', 'parsed', 2)])).toBe(
-			'Дождитесь окончания разбора.'
-		);
+	it('lets files still uploading or parsing through, as the status screen follows them', () => {
+		expect(launchBlocker([...ready(), item('benchmark', 'parsing', 3)])).toBeNull();
+		expect(launchBlocker([item('before', 'uploading', 1), item('after', 'parsing', 2)])).toBeNull();
 	});
 
 	it('names a file that failed', () => {
@@ -96,59 +85,5 @@ describe('launchBlocker', () => {
 			other_issues: 4
 		});
 		expect(launchBlocker([item('before', 'parsed', 1), review])).toBeNull();
-	});
-});
-
-describe('analysisDocumentIds', () => {
-	it('takes every parsed document of every set in upload order', () => {
-		const items = [item('regulatory', 'parsed', 5), item('benchmark', 'failed', 6), ...ready()];
-		expect(analysisDocumentIds(items)).toEqual([5, 1, 2]);
-	});
-});
-
-describe('analysisName', () => {
-	it('stamps the local date and time', () => {
-		expect(analysisName(new Date(2026, 8, 23, 16, 5))).toBe('Анализ от 23.09.2026, 16:05');
-	});
-});
-
-describe('AnalysisLauncher.start', () => {
-	const now = new Date(2026, 8, 23, 16, 5);
-
-	it('starts the analysis on the parsed documents and returns its id', async () => {
-		const api: AnalysesApi = {
-			start: vi.fn(async (name: string) => ({ id: 11, name, status: 'queued' as const }))
-		};
-		const launcher = new AnalysisLauncher(api);
-
-		const id = await launcher.start(ready(), now);
-
-		expect(id).toBe(11);
-		expect(api.start).toHaveBeenCalledWith('Анализ от 23.09.2026, 16:05', [1, 2]);
-		expect(launcher.starting).toBe(true);
-		expect(launcher.error).toBeNull();
-	});
-
-	it('does not call the backend while something blocks the start', async () => {
-		const api: AnalysesApi = { start: vi.fn() };
-		const launcher = new AnalysisLauncher(api);
-
-		const id = await launcher.start([item('before', 'parsed', 1)], now);
-
-		expect(id).toBeNull();
-		expect(api.start).not.toHaveBeenCalled();
-	});
-
-	it('shows the backend message and allows another try when the start fails', async () => {
-		const api: AnalysesApi = {
-			start: vi.fn().mockRejectedValue(new ApiError('Сервер недоступен', 0))
-		};
-		const launcher = new AnalysisLauncher(api);
-
-		const id = await launcher.start(ready(), now);
-
-		expect(id).toBeNull();
-		expect(launcher.error).toBe('Сервер недоступен');
-		expect(launcher.starting).toBe(false);
 	});
 });

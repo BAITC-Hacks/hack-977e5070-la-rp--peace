@@ -8,8 +8,8 @@
 
 	let { children }: LayoutProps = $props();
 
-	// prototype.html shows the top bar on result pages only; the upload screen goes without it.
-	const showAppBar = $derived(page.route.id !== '/');
+	// prototype.html shows the top bar on result pages only, not on the upload and status screens.
+	const showAppBar = $derived(page.route.id !== '/' && page.route.id !== '/status');
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>

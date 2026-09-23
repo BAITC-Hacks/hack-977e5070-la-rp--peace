@@ -1,7 +1,7 @@
 // Model of the «Обработка документов» screen (docs/spec/tz_site.md §6.2, P0.1): every document
 // passes the same stages, one table column each, as in docs/spec/prototype.html.
 
-export type StageId = 'uploaded' | 'parsed' | 'segmented' | 'analyzed';
+export type StageId = 'uploaded' | 'parsed' | 'segmented';
 
 export interface Stage {
 	id: StageId;
@@ -9,12 +9,14 @@ export interface Stage {
 	label: string;
 }
 
-/** Stages in the order a document passes them. */
+/**
+ * Stages in the order a document passes them. The prototype's «Проанализирован» comes back once
+ * the backend compares documents; until then the screen shows only what really happens.
+ */
 export const STAGES: readonly Stage[] = [
 	{ id: 'uploaded', label: 'Загружен' },
 	{ id: 'parsed', label: 'Распознан' },
-	{ id: 'segmented', label: 'Разбит на блоки' },
-	{ id: 'analyzed', label: 'Проанализирован' }
+	{ id: 'segmented', label: 'Разбит на блоки' }
 ];
 
 export type StageState = 'waiting' | 'running' | 'done' | 'failed';

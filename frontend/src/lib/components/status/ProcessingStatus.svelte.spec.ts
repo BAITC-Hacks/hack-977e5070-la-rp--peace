@@ -15,13 +15,13 @@ function row(label: string, states: StageState[], error: string | null = null): 
 }
 
 const allDone = (): DocumentProgress[] => [
-	row(before, ['done', 'done', 'done', 'done']),
-	row(after, ['done', 'done', 'done', 'done'])
+	row(before, ['done', 'done', 'done']),
+	row(after, ['done', 'done', 'done'])
 ];
 
 const inProgress = (): DocumentProgress[] => [
-	row(before, ['done', 'done', 'running', 'waiting']),
-	row(after, ['done', 'running', 'waiting', 'waiting'])
+	row(before, ['done', 'done', 'running']),
+	row(after, ['done', 'running', 'waiting'])
 ];
 
 describe('ProcessingStatus', () => {
@@ -40,8 +40,7 @@ describe('ProcessingStatus', () => {
 			'Документ',
 			'Загружен',
 			'Распознан',
-			'Разбит на блоки',
-			'Проанализирован'
+			'Разбит на блоки'
 		]);
 		await expect.element(screen.getByRole('rowheader', { name: before })).toBeVisible();
 		const stateTexts = (label: string) =>
@@ -50,8 +49,8 @@ describe('ProcessingStatus', () => {
 				.getByRole('cell')
 				.elements()
 				.map((cell) => cell.textContent?.trim());
-		expect(stateTexts(before)).toEqual(['готово', 'готово', 'в работе', 'ждёт']);
-		expect(stateTexts(after)).toEqual(['готово', 'в работе', 'ждёт', 'ждёт']);
+		expect(stateTexts(before)).toEqual(['готово', 'готово', 'в работе']);
+		expect(stateTexts(after)).toEqual(['готово', 'в работе', 'ждёт']);
 		await expect.element(screen.getByRole('alert')).not.toBeInTheDocument();
 		await expect.element(screen.getByText('Готово.')).not.toBeInTheDocument();
 	});
@@ -66,8 +65,8 @@ describe('ProcessingStatus', () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 		const ondone = vi.fn<() => void>();
 		const rows = [
-			row(before, ['done', 'done', 'done', 'done']),
-			row(after, ['done', 'failed', 'waiting', 'waiting'], 'Не удалось прочитать PDF')
+			row(before, ['done', 'done', 'done']),
+			row(after, ['done', 'failed', 'waiting'], 'Не удалось прочитать PDF')
 		];
 
 		const screen = await render(ProcessingStatus, { rows, ondone });
@@ -83,7 +82,7 @@ describe('ProcessingStatus', () => {
 				.getByRole('cell')
 				.elements()
 				.map((cell) => cell.textContent?.trim())
-		).toEqual(['готово', 'ошибка', 'ждёт', 'ждёт']);
+		).toEqual(['готово', 'ошибка', 'ждёт']);
 		vi.advanceTimersByTime(10_000);
 		expect(ondone).not.toHaveBeenCalled();
 		await expect.element(screen.getByText('Готово.')).not.toBeInTheDocument();
@@ -97,7 +96,7 @@ describe('ProcessingStatus', () => {
 
 		await expect
 			.element(screen.getByRole('status'))
-			.toHaveTextContent('Готово. Открываю «Изменения»…');
+			.toHaveTextContent('Готово. Открываю структуру документов…');
 		vi.advanceTimersByTime(1199);
 		expect(ondone).not.toHaveBeenCalled();
 		vi.advanceTimersByTime(1);

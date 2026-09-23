@@ -33,21 +33,20 @@ describe('STAGES', () => {
 		expect(STAGES.map((stage) => stage.label)).toEqual([
 			'Загружен',
 			'Распознан',
-			'Разбит на блоки',
-			'Проанализирован'
+			'Разбит на блоки'
 		]);
 	});
 });
 
 describe('failedStage', () => {
 	it('finds the first failed stage', () => {
-		const failed = row(before, 'done', { segmented: 'failed', analyzed: 'failed' });
+		const failed = row(before, 'done', { parsed: 'done', segmented: 'failed' });
 
 		expect(failedStage(failed)?.label).toBe('Разбит на блоки');
 	});
 
 	it('is null while no stage has failed', () => {
-		expect(failedStage(row(before, 'done', { analyzed: 'running' }))).toBeNull();
+		expect(failedStage(row(before, 'done', { segmented: 'running' }))).toBeNull();
 	});
 });
 
@@ -63,8 +62,8 @@ describe('errorMessage', () => {
 	});
 
 	it('reports a failed stage that came without a message', () => {
-		expect(errorMessage(row(before, 'done', { analyzed: 'failed' }, '  '))).toBe(
-			'Этап «Проанализирован» завершился с ошибкой.'
+		expect(errorMessage(row(before, 'done', { segmented: 'failed' }, '  '))).toBe(
+			'Этап «Разбит на блоки» завершился с ошибкой.'
 		);
 	});
 
@@ -91,10 +90,10 @@ describe('documentErrors', () => {
 describe('overallStatus', () => {
 	it('is done only when every stage of every document is done', () => {
 		expect(overallStatus([row(before, 'done'), row(after, 'done')])).toBe('done');
-		expect(overallStatus([row(before, 'done'), row(after, 'done', { analyzed: 'running' })])).toBe(
+		expect(overallStatus([row(before, 'done'), row(after, 'done', { segmented: 'running' })])).toBe(
 			'running'
 		);
-		expect(overallStatus([row(before, 'done'), row(after, 'done', { analyzed: 'waiting' })])).toBe(
+		expect(overallStatus([row(before, 'done'), row(after, 'done', { segmented: 'waiting' })])).toBe(
 			'running'
 		);
 	});
