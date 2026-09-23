@@ -123,8 +123,16 @@ Python 3.12, `src/` layout, built with Hatchling.
 ```
 src/la_rp_peace/          importable package (name derives from project.name)
   logging_config.py       configure_logging() / get_logger()
+  config.py, db.py        settings, engine
+  models.py, enums.py     ORM models, shared enums
+  ingestion/              .docx/.pdf/.xlsx → clause tree with citation anchors
+  api/                    FastAPI app factory and routers
+  analysis/               methodology stages (Marinadec)
 tests/                    pytest suite, testpaths in pyproject.toml
+test_data/                organiser's documents used for tests and the demo
 ```
+
+Backend details: [`backend.md`](backend.md).
 
 Add new modules under `src/la_rp_peace/` and their tests under `tests/`. If the project
 grows into a `uv` workspace, run `mypy` once per member instead of once at the root.
