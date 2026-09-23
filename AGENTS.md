@@ -1,6 +1,8 @@
 # AGENTS.md
 
 Hackathon repo for team **la(rp)-peace**. Python 3.12, managed with `uv`.
+Three people, six hours, one repo. Several AI agents (Claude Code, Codex) may
+be working at the same time — assume other people's code is changing under you.
 
 Read these before doing anything:
 
@@ -15,11 +17,41 @@ Read these before doing anything:
 uv sync
 ```
 
+## Ownership
+
+Only modify files inside the paths owned by the person you are working for.
+Shared files need a heads-up in team chat before changing them.
+
+| Area | Owner | Paths |
+|---|---|---|
+| TODO: fill in at kickoff | | |
+| TODO | | |
+| TODO | | |
+| Shared (ask first) | everyone | `pyproject.toml`, `uv.lock`, shared models/interfaces |
+
 ## Non-negotiables
 
-- **Pull first**, and every 20–30 minutes after that.
+- **Pull before starting any task and before every commit.** On `main`: `git pull`.
+  On a branch: `git fetch origin && git rebase origin/main` — plain `git pull --rebase`
+  on a branch only tracks that branch, so it will NOT pick up your teammates' work.
 - **Never force-push `main`**, never commit directly on it.
+- **Stay in your owner's paths.** Do not "fix" or refactor code owned by someone else.
+- **Never add, remove, or upgrade dependencies** without explicit approval from your human.
 - **No stub or placeholder code** — if it can't be finished, say so instead.
-- Before every commit: `uv run ruff format . && uv run ruff check --fix .`
+- **If blocked on code another owner hasn't written yet, stop and report.**
+  Do not write your own replacement version of it.
+- **Before every commit**, all of these must pass:
+
+  ```bash
+  uv run ruff format . && uv run ruff check --fix .
+  uv run mypy .      # once the first .py file exists
+  uv run pytest -q   # once a tests/ directory exists
+  ```
+
+## Working style
+
+- One well-scoped task per session. Finish it, commit, then stop.
+- Keep commits and PRs small; merge often rather than batching.
+- When done, summarize what changed and which files were touched.
 
 Everything else is in the two documents above.
