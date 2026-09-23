@@ -5,11 +5,13 @@ description = "Hackathon project for team la(rp)-peace"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
+    "openai>=3.19.0",
     "openpyxl>=3.1.5",
     "pydantic-settings>=2.15.0",
     "pymupdf>=1.28.2",
     "python-docx>=1.2.0",
     "python-multipart>=0.0.32",
+    "regex>=2026.9.10",
     "sqlalchemy>=2",
     "structlog>=25.1.0",
     "uvicorn[standard]>=0.53.0",
@@ -29,6 +31,7 @@ dev = [
     "pytest>=8.3.0",
     "types-openpyxl>=3.1.5.20260827",
     "httpx2>=2.13.1",
+    "types-regex>=2026.9.10.20260911",
 ]
 
 # ---------------------------------------------------------------------------
@@ -98,4 +101,5 @@ untyped_calls_exclude = ["pymupdf"]
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config"
+addopts = "-ra --strict-markers --strict-config -m 'not live'"
+markers = ["live: calls the real OpenAI API; run with `pytest -m live`"]

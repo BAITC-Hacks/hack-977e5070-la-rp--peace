@@ -3,13 +3,15 @@
 A PDF has positioned text fragments, not paragraphs: PyMuPDF's layout blocks both merge
 neighbouring clauses and split wrapped ones, and justified lines arrive as one fragment
 per word. Fragments sharing a baseline are first merged into visual lines, then lines
-into paragraphs. A new paragraph starts at a structural marker (the next clause number;
-a dash item after a line that ends a sentence; a letter item that does so, is «а», or
-continues the lettering) or where bold text begins or ends; consecutive bold lines stay
-together only when tightly spaced, so a wrapped heading is one block while
-table-of-contents entries are not. Before the first clause every line is its own
-paragraph (approval stamp, title). Paragraphs continue across page breaks, a line
-ending in a hyphen joins the next without a space, and bare page numbers are dropped.
+into paragraphs. This is layout recovery, done before the AI profile exists, so it relies
+on generic cues: a new paragraph starts at the next decimal clause number, at a dash item
+after a line that ends a sentence, at a letter item that does so, is «а», or continues the
+lettering, or where bold text begins or ends; consecutive bold lines stay together only
+when tightly spaced, so a wrapped heading is one block while table-of-contents entries
+are not. Before the first clause every line is its own paragraph (approval stamp, title).
+Paragraphs continue across page breaks, and a line ending in a hyphen joins the next
+without a space. Bare page numbers become separate ``page_number`` blocks placed after
+the paragraph they interrupt, so no text is lost and paragraphs stay whole.
 """
 
 import re
@@ -19,6 +21,8 @@ from typing import Any
 
 import pymupdf
 
+from la_rp_peace.enums import DocFormat
+from la_rp_peace.ingestion.extract.types import Extraction, Location, TextBuilder
 from la_rp_peace.ingestion.numbering import (
     Number,
     is_successor,
@@ -29,9 +33,9 @@ from la_rp_peace.ingestion.numbering import (
     split_glued,
     starts_dash_item,
 )
-from la_rp_peace.ingestion.types import Block, Location
 
-HEADING_STYLE = "pdf-heading"
+BOLD_STYLE = "bold"
+PAGE_NUMBER_STYLE = "page_number"
 _TEXT_BLOCK = 0
 _PAGE_NUMBER = re.compile(r"^\d{1,3}$")
 _SENTENCE_END = (".", ";", ":", "!", "?")
@@ -39,6 +43,8 @@ _LETTERS = "абвгдежзиклмнопрстуфхцчшщэюя"
 _LINE_END_HYPHEN = re.compile(r"\w-$")
 # Wrapped heading lines sit ~3pt apart; separate headings and TOC entries 10pt or more.
 _MAX_HEADING_GAP_RATIO = 0.5
+_METADATA_SOURCE = "pdf.metadata"
+_METADATA_KEYS = ("title", "author", "creator", "producer", "creationDate", "modDate")
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,21 +56,28 @@ class _Line:
     bottom: float
 
 
-def _join(parts: list[str]) -> str:
-    """Join wrapped lines; a line ending in a hyphen continues the word («нормативно-» + «правовые»)."""
-    text = ""
-    for part in parts:
-        separator = "" if not text or _LINE_END_HYPHEN.search(text) else " "
-        text += separator + part
-    return text
-
-
 @dataclass(slots=True)
 class _Fragment:
     x: float
     top: float
     bottom: float
     spans: list[dict[str, Any]]
+
+
+def _join(lines: list[_Line]) -> tuple[str, list[tuple[int, int, Location]]]:
+    """Join wrapped lines; a line ending in a hyphen continues the word («нормативно-» + «правовые»).
+
+    Returns:
+        The paragraph text and each line's range in it with its page.
+    """
+    text = ""
+    pieces: list[tuple[int, int, Location]] = []
+    for line in lines:
+        if text and not _LINE_END_HYPHEN.search(text):
+            text += " "
+        pieces.append((len(text), len(text) + len(line.text), {"page": line.page}))
+        text += line.text
+    return text, pieces
 
 
 def _is_bold(spans: list[dict[str, Any]]) -> bool:
@@ -103,7 +116,7 @@ def _lines(document: pymupdf.Document) -> Iterator[_Line]:
         for row in _visual_rows(page):
             spans = [span for fragment in row for span in fragment.spans]
             text = normalize_text(" ".join(span["text"] for span in spans))
-            if text and not _PAGE_NUMBER.match(text):
+            if text:
                 yield _Line(
                     text=text,
                     page=page.number + 1,
@@ -116,11 +129,10 @@ def _lines(document: pymupdf.Document) -> Iterator[_Line]:
 class _ParagraphAssembler:
     """Joins lines into paragraph blocks while tracking the clause numbering."""
 
-    def __init__(self) -> None:
-        self.blocks: list[Block] = []
-        self.title_parts: list[str] = []
-        self._parts: list[str] = []
-        self._page = 0
+    def __init__(self, builder: TextBuilder) -> None:
+        self._builder = builder
+        self._lines: list[_Line] = []
+        self._page_numbers: list[_Line] = []
         self._bold = False
         self._previous: _Line | None = None
         self._letter: str | None = None
@@ -128,14 +140,19 @@ class _ParagraphAssembler:
         self._last: Number | None = None
 
     def feed(self, line: _Line) -> None:
-        if self._parts and not self._starts_paragraph(line):
-            self._parts.append(line.text)
+        if _PAGE_NUMBER.match(line.text):
+            self._page_numbers.append(line)
+            if not self._lines:
+                self._flush_page_numbers()
+            return
+        if self._lines and not self._starts_paragraph(line):
+            self._lines.append(line)
         else:
             self.flush()
-            self._parts, self._page, self._bold = [line.text], line.page, line.bold
+            self._lines, self._bold = [line], line.bold
             self._last_before = self._last
             self._letter = item_letter(line.text)
-        _, self._last = split_glued(_join(self._parts), self._last_before)
+        _, self._last = split_glued(_join(self._lines)[0], self._last_before)
         self._previous = line
 
     def _starts_paragraph(self, line: _Line) -> bool:
@@ -160,20 +177,26 @@ class _ParagraphAssembler:
         previous = self._letter
         return previous is not None and previous in _LETTERS[:-1] and letter == _LETTERS[_LETTERS.index(previous) + 1]
 
+    def _flush_page_numbers(self) -> None:
+        for line in self._page_numbers:
+            self._builder.add(line.text, {"page": line.page}, style=PAGE_NUMBER_STYLE)
+        self._page_numbers = []
+
     def flush(self) -> None:
-        if not self._parts:
-            return
-        text = _join(self._parts)
-        is_title = self._bold and self._last_before is None and leading_number(text) is None
-        if is_title:
-            self.title_parts.append(text)
-        # Title lines are plain paragraphs, matching title-styled Word paragraphs.
-        style = HEADING_STYLE if self._bold and not is_title else None
-        self.blocks.append(Block(text=text, location=Location(page=self._page), style=style))
-        self._parts = []
+        if self._lines:
+            text, pieces = _join(self._lines)
+            style = BOLD_STYLE if self._bold else None
+            self._builder.add(text, {"page": self._lines[0].page}, style=style, pieces=pieces)
+            self._lines = []
+        self._flush_page_numbers()
 
 
-def read_pdf(data: bytes) -> tuple[list[Block], str | None]:
+def _file_metadata(document: pymupdf.Document) -> dict[str, Any]:
+    raw = document.metadata or {}
+    return {key: {"value": raw[key], "source": _METADATA_SOURCE} for key in _METADATA_KEYS if raw.get(key)}
+
+
+def extract_pdf(data: bytes) -> Extraction:
     """Read the paragraphs of every page in reading order.
 
     Scanned PDFs without a text layer yield no blocks; OCR is out of scope.
@@ -182,12 +205,19 @@ def read_pdf(data: bytes) -> tuple[list[Block], str | None]:
         data: Raw file bytes.
 
     Returns:
-        Paragraph blocks tagged with the 1-based page they start on, and the title
-        assembled from bold lines before the first numbered clause (None if absent).
+        The extraction; each line of a paragraph is mapped to its own page.
     """
-    assembler = _ParagraphAssembler()
+    builder = TextBuilder()
+    assembler = _ParagraphAssembler(builder)
     with pymupdf.open(stream=data, filetype="pdf") as document:
         for line in _lines(document):
             assembler.feed(line)
-    assembler.flush()
-    return assembler.blocks, " ".join(assembler.title_parts) or None
+        assembler.flush()
+        metadata = _file_metadata(document)
+    return Extraction(
+        source_format=DocFormat.PDF,
+        original_text=builder.text(),
+        blocks=builder.blocks,
+        source_map=builder.source_map,
+        file_metadata=metadata,
+    )

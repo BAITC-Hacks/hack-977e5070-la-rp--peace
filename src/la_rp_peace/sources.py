@@ -1,118 +1,97 @@
 """Resolve citations to the exact words of the original documents.
 
-Every AI finding cites sources as (clause id, quote). A quote is accepted only if it
-occurs word for word in that clause's text (whitespace differences aside); anything
-else is rejected, so no conclusion can rest on words the documents do not contain. A
-resolved source carries everything a person needs to find the passage by hand: the
-document, its side, the section path, the page for PDFs, and the quote's position
-within the clause text.
+Every AI finding cites sources as (node id, quote). A quote is accepted only if it occurs
+word for word in that node's own text (whitespace differences aside); anything else is
+rejected, so no conclusion can rest on words the documents do not contain. A resolved source
+carries everything a person needs to find the passage by hand — document, side, section
+path, file location — plus exact offsets in the node text and in ``original_text``.
 """
 
+import json
+from typing import Any
+
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from la_rp_peace.enums import DocSet
-from la_rp_peace.ingestion.numbering import normalize_text
-from la_rp_peace.models import Clause
+from la_rp_peace.models import DocumentNode
+from la_rp_peace.navigation import describe
+from la_rp_peace.quotes import locate_quote
 
 
-class ClauseNotFoundError(LookupError):
-    """No clause has the cited id."""
-
-
-class QuoteNotFoundError(ValueError):
-    """The quote does not occur in the cited clause."""
+class NodeNotFoundError(LookupError):
+    """No node has the cited id."""
 
 
 class SourceRef(BaseModel):
     """A verified citation of original document text.
 
     Attributes:
-        clause_id: Cited clause.
-        document_id: Document the clause belongs to.
+        node_id: Cited node.
+        document_id: Document the node belongs to.
         document_name: Original file name.
         doc_set: Side of the comparison («before», «after», …).
         anchor: Short citation, e.g. «п. 3.4 «а»».
         path: Where to look, from the section down.
-        page: 1-based page (PDF only).
-        paragraph_index: Paragraph position (DOCX only).
-        sheet: Worksheet name (XLSX only).
-        row: Worksheet row (XLSX only).
-        quote: The cited words, as they appear in the clause.
-        context: Full clause text containing the quote.
+        location: File position: ``page`` (PDF), ``paragraph`` (DOCX), ``sheet``/``row`` (XLSX).
+        quote: The cited words, as they appear in the document.
+        context: The node's own text containing the quote.
         start: Offset of the quote in ``context``.
         end: Offset just past the quote in ``context``.
+        source_start: Offset of the quote in the document's ``original_text``.
+        source_end: Offset just past the quote in ``original_text``.
     """
 
-    clause_id: str
-    document_id: str
+    node_id: int
+    document_id: int
     document_name: str
-    doc_set: DocSet = Field(serialization_alias="set")
+    doc_set: DocSet | None = Field(serialization_alias="set")
     anchor: str
     path: str
-    page: int | None
-    paragraph_index: int | None
-    sheet: str | None
-    row: int | None
+    location: dict[str, Any]
     quote: str
     context: str
     start: int
     end: int
+    source_start: int
+    source_end: int
 
 
-def locate_quote(text: str, quote: str) -> tuple[int, int]:
-    """Find a quote in clause text.
-
-    Args:
-        text: Normalised clause text.
-        quote: Cited words; whitespace is normalised before matching.
-
-    Returns:
-        Start and end offsets of the first occurrence.
-
-    Raises:
-        QuoteNotFoundError: If the quote is empty or not in the text.
-    """
-    needle = normalize_text(quote)
-    start = text.find(needle) if needle else -1
-    if start < 0:
-        raise QuoteNotFoundError(f"Цитата не найдена в тексте пункта: «{quote}»")
-    return start, start + len(needle)
-
-
-def resolve_source(session: Session, clause_id: str, quote: str | None = None) -> SourceRef:
+def resolve_source(session: Session, node_id: int, quote: str | None = None) -> SourceRef:
     """Verify a citation and describe where it is in the original document.
 
     Args:
         session: Database session.
-        clause_id: Cited clause.
-        quote: Cited words; None cites the whole clause.
+        node_id: Cited node.
+        quote: Cited words; None cites the node's whole own text.
 
     Returns:
         The resolved source.
 
     Raises:
-        ClauseNotFoundError: If the clause does not exist.
-        QuoteNotFoundError: If the quote is not in the clause.
+        NodeNotFoundError: If the node does not exist.
+        QuoteNotFoundError: If the quote is not in the node's text.
     """
-    clause = session.get(Clause, clause_id)
-    if clause is None:
-        raise ClauseNotFoundError(f"Пункт {clause_id} не найден")
-    start, end = (0, len(clause.text)) if quote is None else locate_quote(clause.text, quote)
-    document = clause.document
+    node = session.get(DocumentNode, node_id)
+    if node is None:
+        raise NodeNotFoundError(f"Узел {node_id} не найден")
+    start, end = (0, len(node.text)) if quote is None else locate_quote(node.text, quote)
+    document = node.document
+    siblings = session.scalars(select(DocumentNode).where(DocumentNode.document_id == document.id)).all()
+    place = describe(siblings, json.loads(document.source_map))[node.id]
     return SourceRef(
-        clause_id=clause.id,
+        node_id=node.id,
         document_id=document.id,
-        document_name=document.filename,
-        doc_set=document.doc_set,
-        anchor=clause.anchor,
-        path=clause.path,
-        page=clause.page,
-        paragraph_index=clause.paragraph_index,
-        sheet=clause.sheet,
-        row=clause.row,
-        quote=clause.text[start:end],
-        context=clause.text,
+        document_name=document.file_name,
+        doc_set=DocSet(document.doc_set) if document.doc_set else None,
+        anchor=place.anchor,
+        path=place.path,
+        location=place.location,
+        quote=node.text[start:end],
+        context=node.text,
         start=start,
         end=end,
+        source_start=node.source_start + start,
+        source_end=node.source_start + end,
     )

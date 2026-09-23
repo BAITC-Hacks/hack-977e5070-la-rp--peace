@@ -1,0 +1,13 @@
+{
+  "title": {"status": "extracted", "value": "Положение о внутреннем аудите АО «Компания»", "quotes": ["ПОЛОЖЕНИЕ О ВНУТРЕННЕМ АУДИТЕ АО «Компания»"]},
+  "document_type": {"status": "extracted", "value": "положение", "quotes": ["ПОЛОЖЕНИЕ"]},
+  "organization": {"status": "extracted", "value": "АО «Компания»", "quotes": ["О ВНУТРЕННЕМ АУДИТЕ АО «Компания»"]},
+  "revision": {"status": "extracted", "value": "9", "quotes": ["(редакция No9)"]},
+  "approved_by": {"status": "extracted", "value": "Совет директоров АО «Компания»", "quotes": ["УТВЕРЖДЕНО Советом директоров АО «Компания»"]},
+  "approval_document_type": {"status": "extracted", "value": "протокол", "quotes": ["Протокол No 7"]},
+  "approval_number": {"status": "extracted", "value": "7", "quotes": ["Протокол No 7"]},
+  "document_created_on": {"status": "not_found", "value": null, "quotes": []},
+  "approved_on": {"status": "extracted", "value": "2022-12-23", "quotes": ["от «23» декабря 2022 года"]},
+  "effective_from": {"status": "not_found", "value": null, "quotes": [], "reason": "п. 13.2 связывает вступление в силу с утверждением, календарная дата не указана"},
+  "extra": []
+}

@@ -1,0 +1,70 @@
+{
+  "profile_version": 1,
+  "regex_engine": "python_re",
+  "strategy": "numbering",
+  "patterns": [
+    {
+      "id": "decimal_clause",
+      "node_type": "clause",
+      "regex": "^(?P<marker>\\d{1,3}(?:\\.\\d{1,3})+)(?:\\.\\s*|\\s+)(?=[^\\d\\s])",
+      "apply_to": "block_start",
+      "hierarchy": "marker_depth",
+      "priority": 20,
+      "positive_examples": ["5.3. Директоры", "5.3.1. обеспечивают", "3.10.Рабочие места"],
+      "negative_examples": ["3.10.2021 утверждено", "В соответствии с п. 5.3. настоящего документа"]
+    },
+    {
+      "id": "decimal_section",
+      "node_type": "clause",
+      "regex": "^(?P<marker>\\d{1,3})\\.\\s*(?=[^\\d\\s])",
+      "apply_to": "block_start",
+      "hierarchy": "marker_depth",
+      "priority": 10,
+      "positive_examples": ["5. Права и обязанности", "10.Контроль качества"],
+      "negative_examples": ["2021 года", "25 июня"]
+    },
+    {
+      "id": "glued_clause",
+      "node_type": "clause",
+      "regex": "(?<=[.;:!?)»])\\s+(?P<marker>\\d{1,3}(?:\\.\\d{1,3})*)\\.\\s*(?=[А-ЯЁA-Z])",
+      "apply_to": "inline",
+      "hierarchy": "marker_depth",
+      "priority": 10,
+      "positive_examples": ["в филиалах Общества. 3.10.Работники могут", "мероприятий. 10.Контроль качества"],
+      "negative_examples": ["в соответствии с п.11 Положения", "согласно п. 3 настоящего Положения"]
+    },
+    {
+      "id": "letter_item",
+      "node_type": "list_item",
+      "regex": "^(?P<marker>[а-яё])[.)]\\s+",
+      "apply_to": "block_start",
+      "hierarchy": "list",
+      "priority": 5,
+      "positive_examples": ["а. цели проверки;", "б) объем проверки"],
+      "negative_examples": ["аудит ИТ систем"]
+    },
+    {
+      "id": "dash_item",
+      "node_type": "list_item",
+      "regex": "^(?P<marker>[-–—•])\\s*",
+      "apply_to": "block_start",
+      "hierarchy": "list",
+      "priority": 5,
+      "positive_examples": ["– Федеральный закон от 06.12.2011", "- перечень бизнес-процессов Общества;"],
+      "negative_examples": ["Бизнес-процесс – совокупность"]
+    }
+  ],
+  "heading_styles": ["RegHeading1", "RegHeading2", "bold"],
+  "service_rules": [
+    {"id": "front_matter", "kind": "front_matter"},
+    {
+      "id": "toc",
+      "kind": "toc",
+      "start_regex": "^(?:Оглавление|Содержание)$",
+      "entry_regex": "\\s\\d{1,3}$",
+      "flags": ["IGNORECASE"]
+    },
+    {"id": "page_number", "kind": "page_number", "start_regex": "^\\d{1,3}$"}
+  ],
+  "unresolved": []
+}

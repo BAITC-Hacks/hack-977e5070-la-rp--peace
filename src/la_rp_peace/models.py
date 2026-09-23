@@ -1,80 +1,119 @@
-"""ORM models for uploaded documents and their parsed clauses."""
+"""ORM mapping of the methodology schema (methodology/01_document_parsing.sql).
 
+The tables are created by that SQL file plus ``backend_schema.sql`` (see ``create_schema``),
+never by SQLAlchemy, so the columns below mirror the SQL and add no constraints of their own.
+"""
+
+import sqlite3
 from datetime import UTC, datetime
-from uuid import uuid4
+from pathlib import Path
 
-from sqlalchemy import DateTime, Engine, Enum, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import Engine, ForeignKey, Integer, LargeBinary, Text, inspect
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from la_rp_peace.db import Base
-from la_rp_peace.enums import ClauseKind, DocFormat, DocSet, DocType
+
+METHODOLOGY_SCHEMA = Path(__file__).resolve().parents[2] / "methodology" / "01_document_parsing.sql"
+BACKEND_SCHEMA = Path(__file__).resolve().parent / "backend_schema.sql"
 
 
-def _new_id() -> str:
-    return str(uuid4())
-
-
-def _str_enum[E: (DocSet, DocType, DocFormat, ClauseKind)](enum_cls: type[E]) -> Enum:
-    """Store enum values (not names) as VARCHAR."""
-    return Enum(
-        enum_cls,
-        native_enum=False,
-        length=32,
-        values_callable=lambda members: [member.value for member in members],
-    )
+def utc_timestamp() -> str:
+    """Return the current time in the methodology's format, e.g. 2026-09-23T10:00:00.000Z."""
+    now = datetime.now(UTC)
+    return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
 
 
 class Document(Base):
-    """An uploaded source document and its original bytes."""
+    """A registered file, its metadata card and its extracted text."""
 
     __tablename__ = "documents"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
-    filename: Mapped[str] = mapped_column(String(255))
-    doc_set: Mapped[DocSet] = mapped_column("set", _str_enum(DocSet), index=True)
-    doc_type: Mapped[DocType] = mapped_column(_str_enum(DocType))
-    format: Mapped[DocFormat] = mapped_column(_str_enum(DocFormat))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    file_name: Mapped[str] = mapped_column(Text)
+    source_format: Mapped[str] = mapped_column(Text)
+    file_size_bytes: Mapped[int] = mapped_column(Integer)
+    content_sha256: Mapped[str] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(Text)
-    size: Mapped[int] = mapped_column(Integer)
-    clause_count: Mapped[int] = mapped_column(Integer)
-    content: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    document_type: Mapped[str | None] = mapped_column(Text)
+    organization: Mapped[str | None] = mapped_column(Text)
+    revision: Mapped[str | None] = mapped_column(Text)
+    approved_by: Mapped[str | None] = mapped_column(Text)
+    approval_document_type: Mapped[str | None] = mapped_column(Text)
+    approval_number: Mapped[str | None] = mapped_column(Text)
+    document_created_on: Mapped[str | None] = mapped_column(Text)
+    approved_on: Mapped[str | None] = mapped_column(Text)
+    effective_from: Mapped[str | None] = mapped_column(Text)
+    metadata_evidence: Mapped[str] = mapped_column(Text, default="{}")
+    file_metadata: Mapped[str] = mapped_column(Text, default="{}")
+    original_text: Mapped[str | None] = mapped_column(Text)
+    source_map: Mapped[str] = mapped_column(Text, default="[]")
+    parsing_profile: Mapped[str | None] = mapped_column(Text)
+    parse_status: Mapped[str] = mapped_column(Text, default="pending")
+    uploaded_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
+    doc_set: Mapped[str | None] = mapped_column(Text)
 
-    clauses: Mapped[list["Clause"]] = relationship(
-        back_populates="document",
-        cascade="all, delete-orphan",
-        order_by="Clause.position",
-    )
+
+class DocumentFile(Base):
+    """The uploaded bytes of a document."""
+
+    __tablename__ = "document_files"
+
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True)
+    content: Mapped[bytes] = mapped_column(LargeBinary)
 
 
-class Clause(Base):
-    """One structural fragment of a document: the unit every finding cites."""
+class DocumentNode(Base):
+    """One element of a document tree; ``text`` is its own text, the range covers its children."""
 
-    __tablename__ = "clauses"
+    __tablename__ = "document_nodes"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_id)
-    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), index=True)
-    # Deliberately not a foreign key: clauses of one document are inserted in a single
-    # flush, and row order inside a flush is not guaranteed for self-references.
-    parent_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    parent_id: Mapped[int | None] = mapped_column(Integer)
     position: Mapped[int] = mapped_column(Integer)
-    kind: Mapped[ClauseKind] = mapped_column(_str_enum(ClauseKind))
-    number: Mapped[str | None] = mapped_column(String(64))
-    anchor: Mapped[str] = mapped_column(String(255))
-    path: Mapped[str] = mapped_column(Text)
-    text: Mapped[str] = mapped_column(Text)
-    paragraph_index: Mapped[int | None] = mapped_column(Integer)
-    page: Mapped[int | None] = mapped_column(Integer)
-    sheet: Mapped[str | None] = mapped_column(String(255))
-    row: Mapped[int | None] = mapped_column(Integer)
+    node_type: Mapped[str] = mapped_column(Text)
+    marker: Mapped[str | None] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(Text, default="")
+    source_start: Mapped[int] = mapped_column(Integer)
+    source_end: Mapped[int] = mapped_column(Integer)
 
-    document: Mapped[Document] = relationship(back_populates="clauses")
+    document: Mapped[Document] = relationship()
+
+
+class ParsingIssue(Base):
+    """A problem found while parsing a document, optionally tied to one node."""
+
+    __tablename__ = "parsing_issues"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    node_id: Mapped[int | None] = mapped_column(Integer)
+    issue_type: Mapped[str] = mapped_column(Text)
+    message: Mapped[str] = mapped_column(Text)
+    is_blocking: Mapped[int] = mapped_column(Integer, default=1)
+    resolved_at: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
 
 
 def create_schema(engine: Engine) -> None:
-    """Create all tables that do not exist yet.
+    """Create the methodology tables and the backend additions on a new database.
+
+    Existing databases are left untouched; there are no migrations.
 
     Args:
-        engine: Engine bound to the target database.
+        engine: Engine bound to the target SQLite database.
+
+    Raises:
+        TypeError: If the engine is not backed by the sqlite3 driver.
     """
-    Base.metadata.create_all(engine)
+    if inspect(engine).has_table("documents"):
+        return
+    raw = engine.raw_connection()
+    try:
+        connection = raw.driver_connection
+        if not isinstance(connection, sqlite3.Connection):
+            raise TypeError("The schema scripts need a sqlite3 connection")
+        connection.executescript(METHODOLOGY_SCHEMA.read_text(encoding="utf-8"))
+        connection.executescript(BACKEND_SCHEMA.read_text(encoding="utf-8"))
+    finally:
+        raw.close()

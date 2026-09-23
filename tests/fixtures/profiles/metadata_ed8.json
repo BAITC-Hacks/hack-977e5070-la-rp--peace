@@ -1,0 +1,19 @@
+{
+  "title": {"status": "extracted", "value": "Положение о внутреннем аудите АО «Компания»", "quotes": ["ПОЛОЖЕНИЕ О ВНУТРЕННЕМ АУДИТЕ АО «Компания»"]},
+  "document_type": {"status": "extracted", "value": "положение", "quotes": ["ПОЛОЖЕНИЕ"]},
+  "organization": {"status": "extracted", "value": "АО «Компания»", "quotes": ["О ВНУТРЕННЕМ АУДИТЕ АО «Компания»"]},
+  "revision": {"status": "extracted", "value": "8", "quotes": ["(редакция No8)"]},
+  "approved_by": {"status": "extracted", "value": "Совет директоров АО «Компания»", "quotes": ["УТВЕРЖДЕНО Советом директоров АО «Компания»"]},
+  "approval_document_type": {"status": "extracted", "value": "протокол", "quotes": ["Протокол No 13"]},
+  "approval_number": {"status": "extracted", "value": "13", "quotes": ["Протокол No 13"]},
+  "document_created_on": {"status": "not_found", "value": null, "quotes": []},
+  "approved_on": {"status": "extracted", "value": "2021-06-25", "quotes": ["от «25» июня 2021 года"]},
+  "effective_from": {"status": "not_found", "value": null, "quotes": [], "reason": "п. 13.2 связывает вступление в силу с утверждением, календарная дата не указана"},
+  "extra": [
+    {
+      "name": "условие вступления в силу",
+      "value": "после утверждения Советом директоров",
+      "quotes": ["Все изменения и дополнения к Положению вступают в силу после утверждения Советом директоров Общества"]
+    }
+  ]
+}
