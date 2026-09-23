@@ -12,7 +12,7 @@ the frontend: [`frontend.md`](frontend.md) §4.
 |---|---|---|
 | API | FastAPI + uvicorn, sync endpoints | Typed, OpenAPI at `/docs` for Sula for free |
 | DB | SQLite file `data/larp.sqlite3`, SQLAlchemy 2 sync ORM; foreign keys + WAL on every connection | No server; the methodology schema targets SQLite |
-| Schema | **`methodology/01_document_parsing.sql` executed verbatim** + `src/la_rp_peace/backend_schema.sql` (`document_files`, `documents.doc_set`) on a new DB — no migrations | One source of truth with Marinadec; schema change → delete `data/larp.sqlite3` |
+| Schema | `src/la_rp_peace/schema.sql`: the tables of methodology stage 1 (§9) plus `document_files` and `documents.doc_set`, applied to a new DB — no migrations | Methodology describes the tables, the backend owns the executable schema; schema change → delete `data/larp.sqlite3` |
 | Parsing | python-docx, pymupdf, openpyxl → `original_text` + `source_map`; **AI parsing profile (OpenAI) always** | Methodology §1–§2 |
 | AI | `openai` SDK, JSON mode, model from `OPENAI_MODEL`; model regexes run with the `regex` engine under a timeout | No model-supplied code is executed |
 | Jobs | In-process `ThreadPoolExecutor(PARSER_WORKERS)`; pending documents requeued on startup | No Celery/Redis |
@@ -32,7 +32,7 @@ Config (env or `.env`, see `.env.example`): `DATABASE_URL`, `MAX_UPLOAD_MB`, `CO
 
 ```
 src/la_rp_peace/
-  config.py, db.py, models.py (ORM over the methodology schema), enums.py, backend_schema.sql
+  config.py, db.py, models.py (ORM over schema.sql), enums.py, schema.sql
   quotes.py       verbatim quote matching (whitespace-insensitive, nothing else forgiven)
   navigation.py   anchor / path / file location of stored nodes
   sources.py      citation verification -> SourceRef

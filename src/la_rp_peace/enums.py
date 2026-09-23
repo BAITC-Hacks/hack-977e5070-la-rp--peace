@@ -1,6 +1,6 @@
 """Domain enumerations shared by ingestion, storage and the API.
 
-Values match the CHECK constraints of methodology/01_document_parsing.sql.
+Values match the CHECK constraints in schema.sql.
 """
 
 from enum import StrEnum

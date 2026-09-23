@@ -1,7 +1,8 @@
-"""ORM mapping of the methodology schema (methodology/01_document_parsing.sql).
+"""ORM mapping of the database schema in ``schema.sql``.
 
-The tables are created by that SQL file plus ``backend_schema.sql`` (see ``create_schema``),
-never by SQLAlchemy, so the columns below mirror the SQL and add no constraints of their own.
+The tables follow stage 1 of the methodology (methodology/01_document_parsing.md). They are
+created by ``schema.sql`` (see ``create_schema``), never by SQLAlchemy, so the columns below
+mirror the SQL and add no constraints of their own.
 """
 
 import sqlite3
@@ -13,8 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from la_rp_peace.db import Base
 
-METHODOLOGY_SCHEMA = Path(__file__).resolve().parents[2] / "methodology" / "01_document_parsing.sql"
-BACKEND_SCHEMA = Path(__file__).resolve().parent / "backend_schema.sql"
+SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 
 
 def utc_timestamp() -> str:
@@ -96,7 +96,7 @@ class ParsingIssue(Base):
 
 
 def create_schema(engine: Engine) -> None:
-    """Create the methodology tables and the backend additions on a new database.
+    """Create all tables on a new database.
 
     Existing databases are left untouched; there are no migrations.
 
@@ -113,7 +113,6 @@ def create_schema(engine: Engine) -> None:
         connection = raw.driver_connection
         if not isinstance(connection, sqlite3.Connection):
             raise TypeError("The schema scripts need a sqlite3 connection")
-        connection.executescript(METHODOLOGY_SCHEMA.read_text(encoding="utf-8"))
-        connection.executescript(BACKEND_SCHEMA.read_text(encoding="utf-8"))
+        connection.executescript(SCHEMA.read_text(encoding="utf-8"))
     finally:
         raw.close()

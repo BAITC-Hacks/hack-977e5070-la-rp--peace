@@ -33,7 +33,7 @@ Shared files need a heads-up in team chat before changing them.
 | Frontend (SvelteKit UI) | Sula | `frontend/`, `.agents/frontend.md` |
 | Backend & DB | Alim | `src/la_rp_peace/` (except `analysis/`), `tests/` (except `tests/analysis/`), `.env.example`, `.agents/backend.md` |
 | Methodology & analysis | Marinadec | `docs/methodology/`, `src/la_rp_peace/analysis/`, `tests/analysis/` |
-| Shared (ask first) | everyone | `pyproject.toml`, `uv.lock`, `.mcp.json`, `test_data/`, `methodology/01_document_parsing.sql` (executed by the backend as the DB schema), shared models/interfaces, API contract (`.agents/frontend.md` §4) |
+| Shared (ask first) | everyone | `pyproject.toml`, `uv.lock`, `.mcp.json`, `test_data/`, shared models/interfaces, API contract (`.agents/frontend.md` §4) |
 
 ## Non-negotiables
 
