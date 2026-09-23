@@ -214,6 +214,9 @@ CREATE TABLE entity_sources (
     supports TEXT NOT NULL CHECK (
         CASE WHEN json_valid(supports) THEN json_type(supports) = 'array' ELSE 0 END
     ),
+    -- Root node of the block whose answer produced the source; NULL for the whole-document review.
+    -- A re-run replaces a block's contribution by this key and keeps it when the block fails.
+    block_node_id INTEGER,
     CONSTRAINT entity_sources_range CHECK (quote_end > quote_start),
     CONSTRAINT entity_sources_one_owner CHECK ((entity_id IS NULL) <> (relation_id IS NULL)),
     CONSTRAINT entity_sources_entity_same_document
@@ -221,7 +224,9 @@ CREATE TABLE entity_sources (
     CONSTRAINT entity_sources_relation_same_document
         FOREIGN KEY (document_id, relation_id) REFERENCES entity_relations (document_id, id) ON DELETE CASCADE,
     CONSTRAINT entity_sources_node_same_document
-        FOREIGN KEY (document_id, node_id) REFERENCES document_nodes (document_id, id) ON DELETE CASCADE
+        FOREIGN KEY (document_id, node_id) REFERENCES document_nodes (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT entity_sources_block_same_document
+        FOREIGN KEY (document_id, block_node_id) REFERENCES document_nodes (document_id, id) ON DELETE CASCADE
 ) STRICT;
 
 -- Processing mark for every block sent to the model: a failed request is never "none".

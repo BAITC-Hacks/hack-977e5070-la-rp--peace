@@ -19,6 +19,13 @@ from la_rp_peace.entities.answers import (
     SourceIn,
     UnclearIn,
 )
+from la_rp_peace.entities.previous import (
+    PreviousEntity,
+    PreviousResult,
+    PreviousSource,
+    normalise,
+    same_identity,
+)
 from la_rp_peace.entities.verify import REGISTRY_KEY, SourceVerifier, VerifiedSource
 from la_rp_peace.enums import EntityIssueType, ParentStatus, RelationType
 
@@ -28,9 +35,17 @@ _PARENT_WORDS = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class Evidence:
+    """A verified source and the block (root node id) whose answer produced it; None for the review."""
+
+    source: VerifiedSource
+    block: int | None
+
+
 @dataclass(slots=True)
 class RegisteredEntity:
-    """An entity of the current document."""
+    """An entity of the current document; ``previous_id`` is its database id from the previous run."""
 
     key: str
     name: str
@@ -42,7 +57,13 @@ class RegisteredEntity:
     parent: str | None = None
     parent_status: ParentStatus = ParentStatus.UNKNOWN
     candidates: list[str] = field(default_factory=list)
-    sources: list[VerifiedSource] = field(default_factory=list)
+    evidence: list[Evidence] = field(default_factory=list)
+    previous_id: int | None = None
+
+    @property
+    def sources(self) -> list[VerifiedSource]:
+        """The verified sources, without their block attribution."""
+        return [item.source for item in self.evidence]
 
 
 @dataclass(slots=True)
@@ -53,7 +74,12 @@ class RegisteredRelation:
     to_key: str
     relation_type: RelationType
     conditions: str | None
-    sources: list[VerifiedSource] = field(default_factory=list)
+    evidence: list[Evidence] = field(default_factory=list)
+
+    @property
+    def sources(self) -> list[VerifiedSource]:
+        """The verified sources, without their block attribution."""
+        return [item.source for item in self.evidence]
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +110,8 @@ class Registry:
         self.issues: list[RegistryIssue] = []
         self._allocated = 0
         self._merged: dict[str, str] = {}
+        # Block whose answer is being applied; sources are attributed to it.
+        self._block: int | None = None
 
     # -- bookkeeping -------------------------------------------------------------------
 
@@ -98,12 +126,12 @@ class Registry:
             key = self._merged[key]
         return key
 
-    def _sources(self, sources: list[SourceIn], owner: str) -> list[VerifiedSource]:
+    def _sources(self, sources: list[SourceIn], owner: str) -> list[Evidence]:
         errors: list[str] = []
         verified = self.verifier.verify_all(sources, owner, errors)
         if errors:
             raise ValueError("; ".join(errors))
-        return verified
+        return [Evidence(source, self._block) for source in verified]
 
     def ancestors(self, key: str) -> list[str]:
         """Parent chain of an entity (nearest first), stopping at a repeat."""
@@ -147,7 +175,7 @@ class Registry:
 
     def _set_parent(self, key: str, parent: ParentIn, resolve: dict[str, str]) -> None:
         entity = self.entities[key]
-        entity.sources += self._sources(parent.sources, f"{key} родитель")
+        entity.evidence += self._sources(parent.sources, f"{key} родитель")
         if parent.status is ParentStatus.RESOLVED and parent.ref is not None:
             self._offer_parent(entity, self.canonical(resolve.get(parent.ref, parent.ref)))
         elif parent.status is ParentStatus.AMBIGUOUS:
@@ -212,7 +240,7 @@ class Registry:
         entity.position_type = entity.position_type or mention.position_type
         entity.level = entity.level or mention.level
         entity.roles += [role for role in roles if role not in entity.roles]
-        entity.sources += sources + role_sources
+        entity.evidence += [item for item in sources + role_sources if item not in entity.evidence]
 
     def _note_unclear(self, unclear: list[UnclearIn], resolve: dict[str, str]) -> None:
         for item in unclear:
@@ -221,8 +249,20 @@ class Registry:
             message = item.message + (f" (объекты: {', '.join(refs)})" if len(refs) > 1 else "")
             self.add_issue(RegistryIssue(EntityIssueType.OTHER, message, False, refs[0] if refs else None))
 
-    def apply_block(self, answer: BlockAnswer) -> None:
-        """Apply a block answer that passed ``check_block_answer``."""
+    def apply_block(self, answer: BlockAnswer, block: int | None = None) -> None:
+        """Apply a block answer that passed ``check_block_answer``.
+
+        Args:
+            answer: The verified answer.
+            block: Root node id of the block; its sources are attributed to it.
+        """
+        self._block = block
+        try:
+            self._apply_block(answer)
+        finally:
+            self._block = None
+
+    def _apply_block(self, answer: BlockAnswer) -> None:
         resolve = {
             mention.ref: mention.ref if REGISTRY_KEY.match(mention.ref) else self._new_key()
             for mention in answer.mentions
@@ -252,7 +292,7 @@ class Registry:
                 relation.to_key,
                 relation.relation_type,
             ):
-                existing.sources += [source for source in relation.sources if source not in existing.sources]
+                existing.evidence += [item for item in relation.evidence if item not in existing.evidence]
                 existing.conditions = existing.conditions or relation.conditions
                 return
         self.relations.append(relation)
@@ -278,18 +318,18 @@ class Registry:
             and target in entity.candidates
         )
         if settles and target is not None and not self._would_cycle(entity.key, target):
-            entity.sources += self._sources(update.sources, f"{entity.key} родитель")
+            entity.evidence += self._sources(update.sources, f"{entity.key} родитель")
             entity.parent, entity.parent_status, entity.candidates = target, ParentStatus.RESOLVED, []
             self._drop_ambiguity(entity.key)
             return
         parent = ParentIn(ref=target, status=update.status, candidates=update.candidates, sources=update.sources)
         self._set_parent(entity.key, parent, {})
 
-    def _merge(self, keep: str, merge: str, sources: list[VerifiedSource]) -> None:
+    def _merge(self, keep: str, merge: str, sources: list[Evidence]) -> None:
         kept, gone = self.entities[keep], self.entities.pop(merge)
         self._merged[merge] = keep
         _add_unique(kept.aliases, [gone.name, *gone.aliases], kept.name)
-        kept.sources += gone.sources + sources
+        kept.evidence += [item for item in gone.evidence + sources if item not in kept.evidence]
         kept.roles += [role for role in gone.roles if role not in kept.roles]
         kept.position_type = kept.position_type or gone.position_type
         kept.level = kept.level or gone.level
@@ -331,3 +371,115 @@ class Registry:
             self._make_ambiguous(kept, self._options(kept) + gone.candidates)
         elif gone.parent_status is ParentStatus.ROOT and kept.parent_status is ParentStatus.UNKNOWN:
             kept.parent_status = ParentStatus.ROOT
+        if kept.previous_id is None:
+            kept.previous_id = gone.previous_id
+
+    # -- previous run --------------------------------------------------------------------
+
+    def _previous_key(self, previous_id: int | None) -> str | None:
+        return next((key for key, entity in self.entities.items() if entity.previous_id == previous_id), None)
+
+    def _parent_previous_id(self, entity: RegisteredEntity) -> int | None:
+        return None if entity.parent is None else self.entities[entity.parent].previous_id
+
+    def _matches(self, entity: RegisteredEntity, previous: PreviousEntity) -> bool:
+        names = {normalise(value) for value in [entity.name, *entity.aliases]}
+        return same_identity(names, entity.entity_type, self._parent_previous_id(entity), previous)
+
+    def _reverify(self, sources: list[PreviousSource], block: int, owner: str) -> list[Evidence]:
+        """Check stored sources of the block against the current node texts; drop stale ones with an issue."""
+        evidence: list[Evidence] = []
+        for stored in sources:
+            if stored.block != block:
+                continue
+            errors: list[str] = []
+            source = SourceIn(node_id=stored.node_id, quote=stored.quote, supports=list(stored.supports))
+            verified = self.verifier.verify(source, owner, errors)
+            if verified is None:
+                message = f"Прежний источник снят, текст документа изменился: {'; '.join(errors)}"
+                self.add_issue(RegistryIssue(EntityIssueType.OTHER, message, False))
+            else:
+                evidence.append(Evidence(verified, block))
+        return evidence
+
+    def _restore_entity(self, previous: PreviousEntity, evidence: list[Evidence]) -> RegisteredEntity:
+        key = self._previous_key(previous.id)
+        if key is None:
+            candidates = [e for e in self.entities.values() if e.previous_id is None and self._matches(e, previous)]
+            key = candidates[0].key if len(candidates) == 1 else None
+        if key is None:
+            key = self._new_key()
+            self.entities[key] = RegisteredEntity(key, previous.name, previous.entity_type)
+        entity = self.entities[key]
+        entity.previous_id = previous.id
+        _add_unique(entity.aliases, [previous.name, *previous.aliases], entity.name)
+        entity.position_type = entity.position_type or previous.position_type
+        entity.level = entity.level or previous.level
+        entity.roles += [role for role in previous.roles if role not in entity.roles]
+        entity.evidence += [item for item in evidence if item not in entity.evidence]
+        return entity
+
+    def _restore_parent(self, previous: PreviousEntity, entity: RegisteredEntity, block: int) -> None:
+        """Re-establish the stored parent if this block's own sources supported it."""
+        own = [item for item in entity.evidence if item.block == block]
+        if not any(SUPPORT_PARENT in item.source.supports for item in own):
+            return
+        if previous.parent_status is ParentStatus.RESOLVED:
+            target = self._previous_key(previous.parent_id)
+            if target is not None:
+                self._offer_parent(entity, target)
+        elif previous.parent_status is ParentStatus.AMBIGUOUS:
+            candidates = [key for c in previous.candidates if (key := self._previous_key(c)) is not None]
+            self._make_ambiguous(entity, self._options(entity) + candidates)
+        elif previous.parent_status is ParentStatus.ROOT and entity.parent_status is ParentStatus.UNKNOWN:
+            entity.parent_status = ParentStatus.ROOT
+
+    def restore(self, previous: PreviousResult, block: int) -> int:
+        """Carry a block's previous contribution into the registry, e.g. when the block failed now.
+
+        Stored sources are re-checked against the current node texts; stale ones are dropped
+        with an issue. An object this run already found is extended, not duplicated.
+
+        Args:
+            previous: The document's stored stage 2 result.
+            block: Root node id of the block.
+
+        Returns:
+            How many entities were carried over.
+        """
+        restored: list[tuple[PreviousEntity, RegisteredEntity]] = []
+        for stored in previous.entities_of_block(block):
+            evidence = self._reverify(stored.sources, block, f"«{stored.name}»")
+            if evidence:
+                restored.append((stored, self._restore_entity(stored, evidence)))
+        for stored, entity in restored:
+            self._restore_parent(stored, entity, block)
+        for relation in previous.relations_of_block(block):
+            ends = self._previous_key(relation.from_id), self._previous_key(relation.to_id)
+            evidence = self._reverify(relation.sources, block, "связь")
+            if ends[0] is not None and ends[1] is not None and evidence:
+                self._add_relation(
+                    RegisteredRelation(ends[0], ends[1], relation.relation_type, relation.conditions, evidence)
+                )
+        return len(restored)
+
+    def adopt_previous_ids(self, previous: PreviousResult) -> None:
+        """Give unchanged objects their previous database ids; each match must be unique both ways.
+
+        Parents are matched before their children (a child's identity includes its parent), so
+        the matching repeats until nothing changes.
+        """
+        changed = True
+        while changed:
+            taken = {entity.previous_id for entity in self.entities.values()}
+            free = [stored for stored in previous.entities.values() if stored.id not in taken]
+            open_entities = [entity for entity in self.entities.values() if entity.previous_id is None]
+            matches = {
+                entity.key: [stored for stored in free if self._matches(entity, stored)] for entity in open_entities
+            }
+            changed = False
+            for entity in open_entities:
+                found = matches[entity.key]
+                if len(found) == 1 and sum(found[0] in options for options in matches.values()) == 1:
+                    entity.previous_id = found[0].id
+                    changed = True

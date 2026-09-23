@@ -79,7 +79,7 @@ def extract_block(model: ChatModel, card: DocumentCard, block: Block, registry: 
             registry, block, f"ответ не прошёл проверку за {outcome.attempts} попыток: {listed}", outcome.attempts
         )
     answer = outcome.answer
-    registry.apply_block(answer)
+    registry.apply_block(answer, block.root_id)
     status = _STATUS[answer.block_status]
     message = "; ".join(item.message for item in answer.unclear) or None
     log.info("entity_block_done", node_id=block.root_id, status=status, mentions=len(answer.mentions))

@@ -142,6 +142,7 @@ class EntitySource(Base):
     quote_start: Mapped[int] = mapped_column(Integer)
     quote_end: Mapped[int] = mapped_column(Integer)
     supports: Mapped[str] = mapped_column(Text)
+    block_node_id: Mapped[int | None] = mapped_column(Integer)
 
 
 class EntityBlock(Base):
