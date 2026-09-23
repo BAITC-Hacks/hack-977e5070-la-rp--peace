@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Анализ реорганизации</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#F4F6F5; --surface:#FFFFFF; --ink:#1B2220; --muted:#5B6662; --line:#DCE1DE;
+  --accent:#1E5A62; --accent-ink:#FFFFFF; --accent-soft:#E2EDEE;
+  --ok:#2D7A4B; --ok-bg:#E3F2E8; --bad:#B3261E; --bad-bg:#FBE6E4;
+  --warn:#8F5C00; --warn-bg:#FBEFD6; --neutral:#4B5652; --neutral-bg:#E9EDEB;
+  --hl:#FFF3B8;
+  --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121716; --surface:#1A2120; --ink:#E5EBE9; --muted:#9AA6A2; --line:#2D3634;
+    --accent:#86C6CE; --accent-ink:#0F1A1B; --accent-soft:#1C3235;
+    --ok:#7ECB98; --ok-bg:#16301F; --bad:#F2A39C; --bad-bg:#3A1B18;
+    --warn:#E6BD6A; --warn-bg:#35290F; --neutral:#B5C0BC; --neutral-bg:#252D2B;
+    --hl:#4A4214; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121716; --surface:#1A2120; --ink:#E5EBE9; --muted:#9AA6A2; --line:#2D3634;
+  --accent:#86C6CE; --accent-ink:#0F1A1B; --accent-soft:#1C3235;
+  --ok:#7ECB98; --ok-bg:#16301F; --bad:#F2A39C; --bad-bg:#3A1B18;
+  --warn:#E6BD6A; --warn-bg:#35290F; --neutral:#B5C0BC; --neutral-bg:#252D2B;
+  --hl:#4A4214; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}
+[hidden]{display:none!important}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{margin:0;line-height:1.25;text-wrap:balance}
+h1{font-size:1.5rem;font-weight:600}
+h2{font-size:1.15rem;font-weight:600}
+h3{font-size:.95rem;font-weight:600}
+p{margin:0}
+.mono{font-family:var(--mono);font-size:.86em}
+.muted{color:var(--muted)}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:500}
+
+/* shell */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.topbar-in{max-width:1080px;margin:0 auto;padding-inline:16px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;min-height:56px}
+.brand{font-weight:600;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.brand-mark{width:18px;height:18px;border:2px solid var(--accent);border-radius:3px;position:relative}
+.brand-mark::after{content:"";position:absolute;inset:3px 3px 3px 50%;background:var(--accent)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabs a{padding:17px 10px 15px;text-decoration:none;color:var(--muted);border-bottom:2px solid transparent;font-weight:500}
+.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs a:hover{color:var(--ink)}
+.topbar .new{margin-left:auto;color:var(--accent);text-decoration:none;font-size:.9rem}
+.demo{background:var(--warn-bg);color:var(--warn);font-size:.8rem;text-align:center;padding:4px 16px}
+main{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:28px 64px}
+.page{display:grid;gap:20px}
+.page-head{display:grid;gap:6px}
+
+.subtabs{display:flex;gap:6px;flex-wrap:wrap}
+.subtabs a,.seg button{padding:6px 12px;border:1px solid var(--line);border-radius:6px;text-decoration:none;color:var(--ink);background:var(--surface);font-size:.9rem;cursor:pointer}
+.subtabs a[aria-current="page"],.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.seg{display:inline-flex;gap:0}
+.seg button{border-radius:0}
+.seg button:first-child{border-radius:6px 0 0 6px}
+.seg button:last-child{border-radius:0 6px 6px 0;border-left:0}
+
+/* summary */
+.summary{background:var(--accent-soft);border-radius:8px;padding:14px 16px;display:grid;gap:8px}
+.summary p{max-width:72ch}
+.summary details summary{cursor:pointer;color:var(--accent);font-weight:500;font-size:.92rem;width:max-content;max-width:100%}
+.summary details[open] summary{margin-bottom:8px}
+.summary .full{display:grid;gap:8px;max-width:72ch;font-size:.93rem}
+
+/* status pills */
+.pill{display:inline-block;font-size:.75rem;font-weight:500;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.st-created{background:var(--ok-bg);color:var(--ok)}
+.st-abolished{background:var(--bad-bg);color:var(--bad)}
+.st-kept{background:var(--neutral-bg);color:var(--neutral)}
+.st-transformed{background:var(--warn-bg);color:var(--warn)}
+.conf-high{background:var(--neutral-bg);color:var(--neutral)}
+.conf-medium{background:var(--warn-bg);color:var(--warn)}
+.conf-low{background:var(--bad-bg);color:var(--bad)}
+
+/* tables */
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:500}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;text-align:right}
+
+/* upload */
+.upload-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.drop{border:1.5px dashed var(--line);border-radius:8px;background:var(--surface);padding:16px;display:grid;gap:8px}
+.drop.req{border-color:var(--accent)}
+.drop input[type=file]{max-width:100%}
+.ext{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:16px;display:grid;gap:14px}
+.field{display:grid;gap:6px}
+.text-in{border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--bg);width:100%}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:10px 18px;font-weight:600;cursor:pointer;justify-self:start}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.hint{font-size:.85rem;color:var(--muted)}
+
+/* status */
+.stage{font-size:.8rem;display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.stage i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--line);display:inline-block}
+.stage.done{color:var(--ink)}
+.stage.done i{background:var(--ok);border-color:var(--ok)}
+.stage.run i{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.stage.run i{animation:none;background:var(--accent)}}
+
+/* diff */
+.diff{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.diff-block{border-bottom:1px solid var(--line)}
+.diff-block:last-child{border-bottom:0}
+.diff-block h3{padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row{display:grid;grid-template-columns:118px 1fr;gap:12px;padding:8px 14px;border-bottom:1px dashed var(--line);transition:background .4s}
+.row:last-child{border-bottom:0}
+.row .refs{font-family:var(--mono);font-size:.78rem;color:var(--muted);line-height:1.5}
+.row.hl{background:var(--hl)}
+.moved{display:inline-block;margin-left:6px;font-size:.72rem;padding:0 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font-weight:500}
+del{color:var(--bad);text-decoration:line-through;text-decoration-thickness:1.5px}
+ins{color:var(--ok);text-decoration:none;background:var(--ok-bg);border-radius:2px;padding:0 1px}
+@media (max-width:560px){.row{grid-template-columns:1fr;gap:2px}}
+
+/* visual */
+.vis{display:grid;gap:12px}
+.vis-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.vis-head{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.vis-col{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:8px;align-content:start}
+.vis-col.changed{border-color:var(--accent)}
+.unit{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.unit small{color:var(--muted)}
+@media (max-width:620px){.vis-row,.vis-head{grid-template-columns:1fr}.vis-head>:last-child{display:none}}
+
+/* findings */
+.findings{display:grid;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px}
+.card-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.card-top .id{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.tag{font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:4px;background:var(--ink);color:var(--surface)}
+.card h3{font-size:1.02rem}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:6px 14px;margin:0}
+.kv dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding-top:3px}
+.kv dd{margin:0}
+@media (max-width:560px){.kv{grid-template-columns:1fr}.kv dd{margin-bottom:6px}}
+.srcs{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.srcs li{display:grid;gap:2px}
+.src{font-family:var(--mono);font-size:.8rem;background:var(--accent-soft);color:var(--accent);border:0;border-radius:4px;padding:2px 8px;cursor:pointer;justify-self:start;text-align:left}
+.src:hover{text-decoration:underline}
+.quote{color:var(--muted);font-size:.9rem}
+.note{font-size:.85rem;color:var(--warn);background:var(--warn-bg);border-radius:6px;padding:6px 10px}
+
+/* external */
+.confirm{border:1px solid var(--warn);background:var(--warn-bg);border-radius:8px;padding:14px 16px;display:grid;gap:10px}
+.doclist{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.doclist li{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.linkbtn{background:none;border:0;color:var(--accent);cursor:pointer;padding:0;font-size:.88rem}
+.row-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+/* chat */
+.chat{display:grid;gap:12px}
+.msgs{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px;min-height:280px;align-content:start}
+.msg{max-width:78ch;display:grid;gap:6px}
+.msg.user{justify-self:end;background:var(--accent);color:var(--accent-ink);padding:8px 12px;border-radius:10px 10px 2px 10px}
+.msg.bot{background:var(--bg);padding:10px 12px;border-radius:10px 10px 10px 2px}
+.msg.bot .srcs{display:flex;flex-wrap:wrap;gap:6px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;cursor:pointer;font-size:.88rem}
+.chip:hover{border-color:var(--accent)}
+.composer{display:flex;gap:8px}
+.composer input{flex:1;min-width:0}
+</style>
+</head>
+<body>
+
+<header class="topbar" id="topbar" hidden>
+  <div class="topbar-in">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Анализ оргструктуры</div>
+    <nav class="tabs" aria-label="Разделы">
+      <a href="#changes" data-tab="changes">Изменения</a>
+      <a href="#analysis-loss" data-tab="analysis">Анализ</a>
+      <a href="#external-npa" data-tab="external">Внешние факторы</a>
+      <a href="#chat" data-tab="chat">Чат</a>
+    </nav>
+    <a class="new" href="#upload">Новый анализ</a>
+  </div>
+</header>
+<div class="demo">Макет на заглушках: все документы, пункты и цифры — демонстрационные</div>
+
+<main>
+
+<!-- ============ ЗАГРУЗКА ============ -->
+<section class="page" data-page="upload">
+  <div class="page-head">
+    <h1>Анализ реорганизации</h1>
+    <p class="muted">Загрузите положение и штатное расписание до и после реорганизации. Агент покажет, что изменилось, и найдёт потерю функций, дублирование и конфликт интересов — со ссылкой на пункт документа.</p>
+  </div>
+  <div class="upload-grid">
+    <label class="drop req" for="f-before">
+      <span class="label">Обязательно</span>
+      <h2>Документ «До»</h2>
+      <span class="hint">Word, PDF или Excel. Штатное расписание — внутри документа.</span>
+      <input id="f-before" type="file" accept=".doc,.docx,.pdf,.xls,.xlsx">
+    </label>
+    <label class="drop req" for="f-after">
+      <span class="label">Обязательно</span>
+      <h2>Документ «После»</h2>
+      <span class="hint">Word, PDF или Excel. Штатное расписание — внутри документа.</span>
+      <input id="f-after" type="file" accept=".doc,.docx,.pdf,.xls,.xlsx">
+    </label>
+  </div>
+  <div class="ext">
+    <div>
+      <span class="label">Необязательно</span>
+      <h2>Внешние документы</h2>
+      <p class="hint">Если не загрузить, агент поищет сам в фоне — это не задержит результат.</p>
+    </div>
+    <div class="field">
+      <label for="f-npa"><h3>НПА и регулирующие документы</h3></label>
+      <input id="f-npa" type="file" multiple accept=".doc,.docx,.pdf">
+    </div>
+    <div class="field">
+      <label for="f-ops"><h3>Документы других операторов</h3></label>
+      <input id="f-ops" type="file" multiple accept=".doc,.docx,.pdf,.xls,.xlsx">
+      <label for="op-name" class="hint">или название оператора для поиска агентом</label>
+      <input id="op-name" class="text-in" type="text" placeholder="Например: Оператор Б">
+    </div>
+  </div>
+  <button class="btn" id="start">Начать анализ</button>
+  <p class="hint">В макете можно продолжить без файлов — подставятся демо-документы.</p>
+</section>
+
+<!-- ============ СТАТУС ============ -->
+<section class="page" data-page="status" hidden>
+  <div class="page-head">
+    <h1>Обработка документов</h1>
+    <p class="muted">Анализ выполняется один раз. Дальше страницы показывают готовый результат.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Документ</th><th>Загружен</th><th>Распознан</th><th>Разбит на блоки</th><th>Проанализирован</th></tr></thead>
+      <tbody id="status-rows"></tbody>
+    </table>
+  </div>
+  <p class="hint" id="bg-note"></p>
+  <p id="status-done" hidden><strong>Готово.</strong> <span class="muted">Открываю «Изменения»…</span></p>
+</section>
+
+<!-- ============ ИЗМЕНЕНИЯ ============ -->
+<section class="page" data-page="changes" hidden>
+  <div class="page-head"><h1>Изменения</h1></div>
+  <div class="summary">
+    <p><strong>Изменения в блоках: Структура, ИБ и режим, IT и цифровизация, Персонал, Закупки, Кадры.</strong> Создано 1 подразделение, упразднено 1, преобразовано 2, сохранено 3. Штат сократился с 214 до 198 ед. (−16, −7,5%).</p>
+    <details>
+      <summary>Показать полную аналитику</summary>
+      <div class="full">
+        <p>Отдел режима упразднён: пропускной режим перешёл в Департамент ИБ и режима (п. 3.8 → п. 2.3), мобилизационная подготовка (п. 3.7 «до») не перешла никуда.</p>
+        <p>Создан Центр цифровой трансформации (12 ед.), подчинён Председателю Правления. Одновременно Управление IT сокращено с 40 до 8 ед.; ИТ-стратегия осталась за обоими подразделениями.</p>
+        <p>Отдел кадров преобразован в Департамент по работе с персоналом (9 → 11 ед.). Аудит ИБ перешёл от Службы внутреннего аудита в Департамент ИБ и режима. Приёмка по закупкам перешла от инициатора закупки в Управление закупок.</p>
+      </div>
+    </details>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Подразделение «до»</th><th>Подразделение «после»</th><th>Статус</th><th class="num">Штат, ед.</th></tr></thead>
+      <tbody id="units"></tbody>
+    </table>
+  </div>
+
+  <div class="seg" role="group" aria-label="Вид сравнения">
+    <button id="v-word" aria-pressed="true">Word</button>
+    <button id="v-vis" aria-pressed="false">Визуал</button>
+  </div>
+  <div id="view-word" class="diff"></div>
+  <div id="view-vis" class="vis" hidden></div>
+</section>
+
+<!-- ============ АНАЛИЗ ============ -->
+<section class="page" data-page="analysis" hidden>
+  <div class="page-head"><h1>Анализ</h1></div>
+  <nav class="subtabs" aria-label="Подразделы анализа">
+    <a href="#analysis-loss" data-sub="loss">Потеря функций</a>
+    <a href="#analysis-dup" data-sub="dup">Дублирование</a>
+    <a href="#analysis-conflict" data-sub="conflict">Конфликт интересов</a>
+  </nav>
+  <div id="analysis-body" class="page"></div>
+</section>
+
+<!-- ============ ВНЕШНИЕ ФАКТОРЫ ============ -->
+<section class="page" data-page="external" hidden>
+  <div class="page-head"><h1>Внешние факторы</h1></div>
+  <nav class="subtabs" aria-label="Подразделы внешних факторов">
+    <a href="#external-npa" data-sub="npa">НПА-анализ</a>
+    <a href="#external-operators" data-sub="operators">Другие операторы</a>
+  </nav>
+
+  <div data-ext="npa" class="page">
+    <div class="summary">
+      <p id="npa-lead"></p>
+      <details>
+        <summary>Показать полную аналитику</summary>
+        <div class="full">
+          <p>Приоритет источников: сначала НПА, загруженные пользователем (поиск не выполняется); если их нет — поиск агентом на adilet.zan.kz с проверкой пометки «утратил силу».</p>
+          <p>Находки описывают только несоответствия нормам, со ссылкой на статью или пункт НПА.</p>
+        </div>
+      </details>
+    </div>
+    <div id="npa-docs"></div>
+    <div id="npa-findings" class="findings"></div>
+  </div>
+
+  <div data-ext="operators" class="page" hidden>
+    <div class="summary">
+      <p id="ops-lead"></p>
+      <details>
+        <summary>Показать полную аналитику</summary>
+        <div class="full">
+          <p>Сравниваются только созданные и преобразованные подразделения. Данные операторов берутся из загруженных документов или находятся агентом по названию оператора и используются после подтверждения.</p>
+        </div>
+      </details>
+    </div>
+    <div id="ops-docs"></div>
+    <div id="ops-findings" class="findings"></div>
+  </div>
+</section>
+
+<!-- ============ ЧАТ ============ -->
+<section class="page" data-page="chat" hidden>
+  <div class="page-head"><h1>Чат</h1></div>
+  <div class="summary">
+    <p>Отвечает только по загруженным документам и ссылается на пункты. Если ответа в документах нет — скажет об этом.</p>
+  </div>
+  <div class="chat">
+    <div class="msgs" id="msgs" aria-live="polite"></div>
+    <div class="chips" id="chips"></div>
+    <form class="composer" id="composer">
+      <label for="q" class="label" hidden>Вопрос</label>
+      <input id="q" class="text-in" type="text" placeholder="Спросите о документах" autocomplete="off">
+      <button class="btn" type="submit">Спросить</button>
+    </form>
+  </div>
+</section>
+
+</main>
+
+<script>
+/* =========================================================
+   ЗАГЛУШКИ. Формат находки — раздел 10 ТЗ.
+   Необязательное поле npa_note — пометка «НПА не загружены».
+   ========================================================= */
+const FINDINGS = [
+  { id:"F-001", type:"loss", function:"Организация мобилизационной подготовки",
+    subjects_before:["Отдел режима"], subjects_after:[],
+    summary:"Функция не закреплена ни за одним подразделением после реорганизации",
+    reasoning:"Отдел режима упразднён, функция не перешла ни в одно из новых подразделений.",
+    sources:[{document:"before", block:"ИБ и режим", clause:"3.7", quote:"…обеспечивает организацию мобилизационной подготовки и гражданской обороны"}],
+    confidence:"high" },
+  { id:"F-002", type:"loss", cascade:true, function:"Мониторинг инцидентов информационной безопасности",
+    subjects_before:[], subjects_after:["Департамент ИБ и режима"],
+    summary:"Функция есть в положении департамента, но не распределена по управлениям и должностям",
+    reasoning:"В положении «после» функция закреплена за департаментом, однако ни Управление защиты информации, ни Отдел режима и пропуска её не получили.",
+    sources:[{document:"after", block:"ИБ и режим", clause:"2.4", quote:"…осуществляет мониторинг инцидентов информационной безопасности"},
+             {document:"after", block:"Кадры", clause:"К.5", quote:"Управление защиты информации (10 ед.), Отдел режима и пропуска (8 ед.)"}],
+    confidence:"medium" },
+  { id:"F-003", type:"duplication", function:"Разработка ИТ-стратегии",
+    subjects_before:["Управление IT"], subjects_after:["Управление IT","Центр цифровой трансформации"],
+    summary:"ИТ-стратегию разрабатывают два подразделения",
+    reasoning:"Центр цифровой трансформации получил разработку ИТ-стратегии, но за Управлением IT эта функция сохранена без изменений.",
+    sources:[{document:"after", block:"IT и цифровизация", clause:"4.2", quote:"Управление IT разрабатывает ИТ-стратегию Общества"},
+             {document:"after", block:"IT и цифровизация", clause:"5.1", quote:"…разрабатывает ИТ-стратегию и программу цифровизации Общества"}],
+    confidence:"high" },
+  { id:"F-004", type:"duplication", function:"Обучение работников по вопросам ИБ",
+    subjects_before:["Отдел кадров"], subjects_after:["Департамент ИБ и режима","Департамент по работе с персоналом"],
+    summary:"Обучение по ИБ закреплено за двумя департаментами",
+    reasoning:"Оба положения «после» поручают организацию обучения по ИБ разным подразделениям без разграничения ролей.",
+    sources:[{document:"after", block:"ИБ и режим", clause:"2.6", quote:"…организует обучение работников по вопросам информационной безопасности"},
+             {document:"after", block:"Персонал", clause:"6.5", quote:"…организует обучение работников, в том числе по вопросам информационной безопасности"}],
+    confidence:"medium" },
+  { id:"F-005", type:"conflict_of_interest", function:"Закупка и приёмка товаров, работ и услуг",
+    subjects_before:["Управление закупок","Подразделение — инициатор"], subjects_after:["Управление закупок"],
+    summary:"Одно подразделение и закупает, и принимает результат",
+    reasoning:"До реорганизации приёмку вёл инициатор закупки. Теперь закупка и приёмка в одних руках.",
+    sources:[{document:"after", block:"Закупки", clause:"7.1", quote:"Управление закупок проводит закупки товаров, работ и услуг"},
+             {document:"after", block:"Закупки", clause:"7.4", quote:"Управление закупок осуществляет приёмку поставленных товаров…"}],
+    npa_note:"НПА не загружены — нормы о несовместимости функций не проверялись.",
+    confidence:"high" },
+  { id:"F-006", type:"conflict_of_interest", function:"Реализация и аудит мер ИБ",
+    subjects_before:["Департамент ИБ","Служба внутреннего аудита"], subjects_after:["Департамент ИБ и режима"],
+    summary:"Департамент исполняет меры ИБ и сам их проверяет",
+    reasoning:"Аудит ИБ перешёл от Службы внутреннего аудита к департаменту, который эти меры реализует.",
+    sources:[{document:"after", block:"ИБ и режим", clause:"2.2", quote:"…реализует меры по защите информации и информационных систем"},
+             {document:"after", block:"ИБ и режим", clause:"2.8", quote:"Департамент ИБ и режима проводит аудит информационной безопасности"},
+             {document:"before", block:"ИБ и режим", clause:"2.5", quote:"Служба внутреннего аудита проводит аудит информационной безопасности"}],
+    npa_note:"НПА не загружены — нормы о несовместимости функций не проверялись.",
+    confidence:"high" },
+  { id:"F-007", type:"contradiction", function:"Внедрение изменений в информационных системах",
+    subjects_before:[], subjects_after:["Управление IT","Центр цифровой трансформации"],
+    summary:"Порядок внедрения изменений в ИС описан противоречиво",
+    reasoning:"Управление IT согласует все изменения до внедрения, а Центр цифровой трансформации определяет сроки внедрения самостоятельно.",
+    sources:[{document:"after", block:"IT и цифровизация", clause:"4.5", quote:"…согласует все изменения в информационных системах до их внедрения"},
+             {document:"after", block:"IT и цифровизация", clause:"5.4", quote:"…самостоятельно определяет сроки внедрения изменений"}],
+    confidence:"medium" },
+  { id:"F-008", type:"npa_mismatch", function:"Аудит информационной безопасности",
+    subjects_before:[], subjects_after:["Департамент ИБ и режима"],
+    summary:"Аудит ИБ проводит подразделение, отвечающее за меры ИБ",
+    reasoning:"Норма требует независимости аудита ИБ от подразделения, реализующего меры защиты.",
+    sources:[{document:"after", block:"ИБ и режим", clause:"2.8", quote:"Департамент ИБ и режима проводит аудит информационной безопасности"},
+             {document:"npa", block:"Правила обеспечения ИБ (пример)", clause:"12", quote:"…аудит проводится лицом, не участвующим в реализации мер…"}],
+    confidence:"medium" },
+  { id:"F-009", type:"benchmark", function:"Цифровая трансформация",
+    subjects_before:[], subjects_after:["Центр цифровой трансформации"],
+    summary:"У Оператора Б аналогичное подразделение не разрабатывает ИТ-стратегию",
+    reasoning:"У Оператора Б дирекция цифровизации ведёт программу цифровизации, а ИТ-стратегия остаётся за ИТ-блоком — дублирования, как в F-003, нет.",
+    sources:[{document:"after", block:"IT и цифровизация", clause:"5.1", quote:"…разрабатывает ИТ-стратегию и программу цифровизации Общества"},
+             {document:"operator", block:"Оператор Б (пример), положение о дирекции", clause:"2.1", quote:"…реализует программу цифровизации…"}],
+    confidence:"low" }
+];
+
+const DIFF = [
+  {block:"Структура", b:"1.1", a:"1.1", html:"В структуру Общества входят: Департамент информационной безопасности<ins> и режима</ins>, <del>Отдел режима, </del>Управление закупок, <del>Отдел кадров</del><ins>Департамент по работе с персоналом</ins>, Служба внутреннего аудита, Управление IT<ins>, Центр цифровой трансформации</ins>."},
+  {block:"Структура", b:"1.2", a:"1.2", html:"Департамент информационной безопасности<ins> и режима</ins> подчиняется заместителю Председателя Правления."},
+  {block:"Структура", b:null, a:"1.3", html:"<ins>Центр цифровой трансформации подчиняется Председателю Правления.</ins>"},
+  {block:"ИБ и режим", b:"2.1", a:"2.2", html:"Департамент ИБ<ins> и режима</ins> реализует меры по защите информации и информационных систем."},
+  {block:"ИБ и режим", b:"3.8", a:"2.3", moved:"перенесено: Отдел режима → Департамент ИБ и режима", html:"<del>Отдел режима</del><ins>Департамент ИБ и режима</ins> обеспечивает пропускной и внутриобъектовый режим."},
+  {block:"ИБ и режим", b:null, a:"2.4", html:"<ins>Департамент ИБ и режима осуществляет мониторинг инцидентов информационной безопасности.</ins>"},
+  {block:"ИБ и режим", b:null, a:"2.6", html:"<ins>Департамент ИБ и режима организует обучение работников по вопросам информационной безопасности.</ins>"},
+  {block:"ИБ и режим", b:"2.5", a:"2.8", moved:"перенесено: Служба внутреннего аудита → Департамент ИБ и режима", html:"<del>Служба внутреннего аудита</del><ins>Департамент ИБ и режима</ins> проводит аудит информационной безопасности."},
+  {block:"ИБ и режим", b:"3.7", a:null, html:"<del>Отдел режима обеспечивает организацию мобилизационной подготовки и гражданской обороны.</del>"},
+  {block:"IT и цифровизация", b:"4.2", a:"4.2", html:"Управление IT разрабатывает ИТ-стратегию Общества."},
+  {block:"IT и цифровизация", b:null, a:"4.5", html:"<ins>Управление IT согласует все изменения в информационных системах до их внедрения.</ins>"},
+  {block:"IT и цифровизация", b:null, a:"5.1", html:"<ins>Центр цифровой трансформации разрабатывает ИТ-стратегию и программу цифровизации Общества.</ins>"},
+  {block:"IT и цифровизация", b:null, a:"5.4", html:"<ins>Центр цифровой трансформации самостоятельно определяет сроки внедрения изменений в информационных системах.</ins>"},
+  {block:"Персонал", b:"6.5", a:"6.5", html:"<del>Отдел кадров</del><ins>Департамент по работе с персоналом</ins> организует обучение работников<ins>, в том числе по вопросам информационной безопасности</ins>."},
+  {block:"Закупки", b:"7.1", a:"7.1", html:"Управление закупок проводит закупки товаров, работ и услуг."},
+  {block:"Закупки", b:"7.4", a:"7.4", html:"<del>Приёмку товаров, работ и услуг осуществляет подразделение — инициатор закупки.</del> <ins>Управление закупок осуществляет приёмку поставленных товаров, работ и услуг.</ins>"},
+  {block:"Кадры", b:"К.1", a:"К.1", html:"Общая штатная численность: <del>214</del> <ins>198</ins> ед."},
+  {block:"Кадры", b:"К.2", a:"К.2", html:"Управление IT: <del>40</del> <ins>8</ins> ед."},
+  {block:"Кадры", b:"К.3", a:null, html:"<del>Отдел режима: 6 ед.</del>"},
+  {block:"Кадры", b:"К.4", a:"К.3", html:"<del>Отдел кадров: 9 ед.</del> <ins>Департамент по работе с персоналом: 11 ед.</ins>"},
+  {block:"Кадры", b:null, a:"К.4", html:"<ins>Центр цифровой трансформации: 12 ед.</ins>"},
+  {block:"Кадры", b:"К.5", a:"К.5", html:"Департамент ИБ<ins> и режима</ins>: Управление защиты информации (10 ед.)<ins>, Отдел режима и пропуска (8 ед.)</ins>."}
+];
+
+const UNITS = [
+  {before:"Департамент ИБ", after:"Департамент ИБ и режима", st:"transformed", staff:"10 → 18"},
+  {before:"Отдел режима", after:"—", st:"abolished", staff:"6 → 0"},
+  {before:"Отдел кадров", after:"Департамент по работе с персоналом", st:"transformed", staff:"9 → 11"},
+  {before:"—", after:"Центр цифровой трансформации", st:"created", staff:"0 → 12"},
+  {before:"Управление IT", after:"Управление IT", st:"kept", staff:"40 → 8"},
+  {before:"Управление закупок", after:"Управление закупок", st:"kept", staff:"—"},
+  {before:"Служба внутреннего аудита", after:"Служба внутреннего аудита", st:"kept", staff:"—"}
+];
+
+const VIS = [
+  {block:"Структура", changed:true,
+    before:[["Департамент ИБ",""],["Отдел режима","abolished"],["Отдел кадров",""],["Управление IT",""],["Управление закупок",""],["Служба внутреннего аудита",""]],
+    after:[["Департамент ИБ и режима","transformed"],["Департамент по работе с персоналом","transformed"],["Центр цифровой трансформации","created"],["Управление IT","kept"],["Управление закупок","kept"],["Служба внутреннего аудита","kept"]]},
+  {block:"ИБ и режим", changed:true,
+    before:[["Меры защиты информации — ДИБ, п. 2.1",""],["Аудит ИБ — СВА, п. 2.5",""],["Мобподготовка — Отдел режима, п. 3.7","abolished"],["Пропускной режим — Отдел режима, п. 3.8",""]],
+    after:[["Меры защиты информации — п. 2.2","kept"],["Пропускной режим — п. 2.3","transformed"],["Мониторинг инцидентов — п. 2.4","created"],["Обучение по ИБ — п. 2.6","created"],["Аудит ИБ — п. 2.8","transformed"]]},
+  {block:"IT и цифровизация", changed:true,
+    before:[["ИТ-стратегия — Управление IT, п. 4.2",""]],
+    after:[["ИТ-стратегия — Управление IT, п. 4.2","kept"],["Согласование изменений ИС — п. 4.5","created"],["ИТ-стратегия, цифровизация — ЦЦТ, п. 5.1","created"],["Сроки внедрения изменений — ЦЦТ, п. 5.4","created"]]},
+  {block:"Персонал", changed:true,
+    before:[["Обучение работников — Отдел кадров, п. 6.5",""]],
+    after:[["Обучение, в т. ч. по ИБ — ДРП, п. 6.5","transformed"]]},
+  {block:"Закупки", changed:true,
+    before:[["Закупки — п. 7.1",""],["Приёмка — инициатор, п. 7.4",""]],
+    after:[["Закупки — п. 7.1","kept"],["Приёмка — Управление закупок, п. 7.4","transformed"]]},
+  {block:"Кадры", changed:true,
+    before:[["Всего: 214 ед.",""]],
+    after:[["Всего: 198 ед. (−16)","transformed"]]}
+];
+
+const ST = {created:"создано", abolished:"упразднено", kept:"сохранено", transformed:"преобразовано"};
+const TYPE = {loss:"Потеря функции", duplication:"Дублирование", conflict_of_interest:"Конфликт интересов",
+              contradiction:"Противоречие функций", npa_mismatch:"Несоответствие НПА", benchmark:"Сравнение с оператором"};
+const CONF = {high:"уверенность: высокая", medium:"уверенность: средняя", low:"уверенность: низкая"};
+const DOC = {before:"До", after:"После", npa:"НПА", operator:"Оператор"};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pill = st => `<span class="pill st-${st}">${ST[st]}</span>`;
+
+/* ---------- ссылки на источник ---------- */
+function srcBtn(s){
+  const label = `${DOC[s.document]} · ${s.block} · п. ${s.clause}`;
+  const linkable = s.document === "before" || s.document === "after";
+  return linkable
+    ? `<button class="src" data-doc="${s.document}" data-clause="${esc(s.clause)}" title="${esc(s.quote || "")}">${esc(label)}</button>`
+    : `<span class="src" style="cursor:default" title="${esc(s.quote || "")}">${esc(label)}</span>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("button.src");
+  if (!b) return;
+  openClause(b.dataset.doc, b.dataset.clause);
+});
+let pendingClause = null;
+function openClause(doc, clause){
+  pendingClause = {doc, clause};
+  if (location.hash === "#changes") highlightPending();
+  else location.hash = "changes";      // route() подсветит пункт после перехода
+}
+function highlightPending(){
+  if (!pendingClause) return;
+  const {doc, clause} = pendingClause; pendingClause = null;
+  setView("word");
+  const idx = DIFF.findIndex(r => (doc === "before" ? r.b : r.a) === clause);
+  const el = document.getElementById("row-" + idx);
+  if (!el) return;
+  document.querySelectorAll(".row.hl").forEach(r => r.classList.remove("hl"));
+  el.classList.add("hl");
+  el.scrollIntoView({block:"center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
+}
+
+/* ---------- карточка находки ---------- */
+function card(f){
+  const who = list => list.length ? list.map(esc).join(", ") : "<span class='muted'>не закреплена ни за кем</span>";
+  let rows = "";
+  if (f.type === "loss" && !f.cascade){
+    rows += `<dt>Было</dt><dd>${who(f.subjects_before)}</dd><dt>Стало</dt><dd>${who(f.subjects_after)}</dd>`;
+  } else if (f.type === "loss" && f.cascade){
+    rows += `<dt>Закреплена за</dt><dd>${who(f.subjects_after)}</dd><dt>Вниз по уровням</dt><dd><span class="muted">не распределена</span></dd>`;
+  } else {
+    rows += `<dt>Субъекты</dt><dd>${who(f.subjects_after)}</dd>`;
+  }
+  rows += `<dt>Обоснование</dt><dd>${esc(f.reasoning)}</dd>`;
+  rows += `<dt>Источники</dt><dd><ul class="srcs">${f.sources.map(s =>
+    `<li>${srcBtn(s)}<span class="quote">«${esc(s.quote)}»</span></li>`).join("")}</ul></dd>`;
+  return `<article class="card">
+    <div class="card-top"><span class="tag">${TYPE[f.type]}${f.cascade ? " · каскадирование" : ""}</span>
+      <span class="pill conf-${f.confidence}">${CONF[f.confidence]}</span><span class="id">${f.id}</span></div>
+    <div><h3>${esc(f.function)}</h3><p class="muted">${esc(f.summary)}</p></div>
+    <dl class="kv">${rows}</dl>
+    ${f.npa_note ? `<p class="note">${esc(f.npa_note)}</p>` : ""}
+  </article>`;
+}
+
+/* ---------- Изменения ---------- */
+function renderChanges(){
+  $("#units").innerHTML = UNITS.map(u =>
+    `<tr><td>${esc(u.before)}</td><td>${esc(u.after)}</td><td>${pill(u.st)}</td><td class="num">${u.staff}</td></tr>`).join("");
+  const blocks = [...new Set(DIFF.map(r => r.block))];
+  $("#view-word").innerHTML = blocks.map(bl => `<div class="diff-block"><h3>${bl}</h3>` +
+    DIFF.map((r,i) => r.block !== bl ? "" :
+      `<div class="row" id="row-${i}"><div class="refs">до: ${r.b ? "п. " + r.b : "—"}<br>после: ${r.a ? "п. " + r.a : "—"}</div>
+       <div>${r.html}${r.moved ? `<span class="moved">${r.moved}</span>` : ""}</div></div>`).join("") + `</div>`).join("");
+  const col = items => items.map(([t,st]) => `<div class="unit"><span>${esc(t)}</span>${st ? pill(st) : ""}</div>`).join("");
+  $("#view-vis").innerHTML = `<div class="vis-head"><span class="label">Документ «До»</span><span class="label">Документ «После»</span></div>` +
+    VIS.map(v => `<h3>${v.block}</h3><div class="vis-row">
+      <div class="vis-col">${col(v.before)}</div><div class="vis-col ${v.changed ? "changed" : ""}">${col(v.after)}</div></div>`).join("");
+}
+function setView(v){
+  $("#v-word").setAttribute("aria-pressed", v === "word");
+  $("#v-vis").setAttribute("aria-pressed", v === "vis");
+  $("#view-word").hidden = v !== "word";
+  $("#view-vis").hidden = v !== "vis";
+}
+$("#v-word").onclick = () => setView("word");
+$("#v-vis").onclick = () => setView("vis");
+
+/* ---------- Анализ ---------- */
+const ANALYSIS = {
+  loss: {types:["loss"],
+    lead:"<strong>Потеряна 1 функция, ещё 1 не распределена по уровням.</strong> Мобилизационная подготовка после упразднения Отдела режима не закреплена ни за кем.",
+    full:["Правило: функция в «до» была закреплена за подразделением или должностью, а в «после» — ни за кем.",
+          "Каскадирование: функция есть в положении «после», но не опущена до управлений и должностей. Найден 1 случай — мониторинг инцидентов ИБ.",
+          "Пропускной режим не считается потерей: он перенесён из п. 3.8 «до» в п. 2.3 «после»."]},
+  dup: {types:["duplication"],
+    lead:"<strong>2 случая дублирования.</strong> ИТ-стратегия — у Управления IT и Центра цифровой трансформации; обучение по ИБ — у двух департаментов.",
+    full:["Дублирование — одна и та же функция закреплена за двумя и более подразделениями или должностями.",
+          "Оба случая возникли при создании и преобразовании подразделений: новые функции добавлены, а старые не сняты."]},
+  conflict: {types:["conflict_of_interest","contradiction"],
+    lead:"<strong>2 конфликта интересов и 1 противоречие функций.</strong> НПА не загружены — нормы о несовместимости не проверялись.",
+    full:["Конфликт интересов — у одного субъекта функции, которые не должны быть в одних руках: закупает и принимает, исполняет и контролирует.",
+          "Противоречие функций — функции разных субъектов противоречат друг другу по одному объекту: порядок внедрения изменений в ИС.",
+          "Если загрузить НПА, агент дополнительно сошлётся на нормы о несовместимости."]}
+};
+function renderAnalysis(sub){
+  const a = ANALYSIS[sub];
+  const items = FINDINGS.filter(f => a.types.includes(f.type));
+  $("#analysis-body").innerHTML = `<div class="summary"><p>${a.lead}</p>
+    <details><summary>Показать полную аналитику</summary><div class="full">${a.full.map(p => `<p>${p}</p>`).join("")}</div></details></div>
+    <div class="findings">${items.map(card).join("")}</div>`;
+  document.querySelectorAll("[data-sub]").forEach(l => l.toggleAttribute("aria-current", false));
+  document.querySelector(`[data-page="analysis"] [data-sub="${sub}"]`).setAttribute("aria-current","page");
+}
+
+/* ---------- Внешние факторы ---------- */
+let npaDocs = [
+  {name:"Правила обеспечения информационной безопасности (пример)", src:"adilet.zan.kz", status:"действует"},
+  {name:"Типовое положение о службе режима (пример)", src:"adilet.zan.kz", status:"действует"}
+];
+let npaConfirmed = false;
+function renderNpa(){
+  const box = $("#npa-docs");
+  if (!npaDocs.length){
+    $("#npa-lead").innerHTML = "<strong>НПА не найдены, загрузите документ.</strong>";
+    box.innerHTML = `<div class="ext"><div class="field"><label for="f-npa2"><h3>Загрузить НПА</h3></label><input id="f-npa2" type="file" multiple accept=".doc,.docx,.pdf"></div></div>`;
+    $("#npa-findings").innerHTML = "";
+    return;
+  }
+  const list = `<ul class="doclist">${npaDocs.map((d,i) => `<li><span>${esc(d.name)} <span class="muted">· ${d.src} · ${d.status}</span></span>
+    <span class="row-actions"><button class="linkbtn" data-npa-del="${i}">Удалить</button></span></li>`).join("")}</ul>`;
+  if (!npaConfirmed){
+    $("#npa-lead").innerHTML = "<strong>Агент нашёл НПА в сети — нужно подтверждение.</strong> Проверка соответствия начнётся после подтверждения.";
+    box.innerHTML = `<div class="confirm"><h3>Найдены документы</h3>${list}
+      <p>Подтвердите использование. Ответственность за выбор источников на пользователе.</p>
+      <div class="row-actions"><button class="btn" id="npa-ok">Подтвердить</button>
+      <label class="linkbtn" for="f-npa3">Заменить или догрузить</label><input id="f-npa3" type="file" multiple hidden></div></div>`;
+    $("#npa-findings").innerHTML = "";
+    $("#npa-ok").onclick = () => { npaConfirmed = true; renderNpa(); };
+  } else {
+    $("#npa-lead").innerHTML = "<strong>1 несоответствие нормам.</strong> Аудит ИБ проводит то же подразделение, что реализует меры защиты.";
+    box.innerHTML = `<h3 style="margin-bottom:8px">Используемые НПА</h3>${list}
+      <p class="hint" style="margin-top:8px"><label class="linkbtn" for="f-npa4">Заменить или догрузить</label><input id="f-npa4" type="file" multiple hidden></p>`;
+    $("#npa-findings").innerHTML = FINDINGS.filter(f => f.type === "npa_mismatch").map(card).join("");
+  }
+  box.querySelectorAll("[data-npa-del]").forEach(b => b.onclick = () => { npaDocs.splice(+b.dataset.npaDel, 1); renderNpa(); });
+}
+let opsConfirmed = false;
+function renderOps(){
+  const name = ($("#op-name").value || "Оператор Б (пример)").trim();
+  if (!opsConfirmed){
+    $("#ops-lead").innerHTML = `<strong>Найдены данные по оператору «${esc(name)}» — нужно подтверждение.</strong>`;
+    $("#ops-docs").innerHTML = `<div class="confirm"><h3>Найденные данные</h3>
+      <ul class="doclist"><li><span>Положение о дирекции цифровизации <span class="muted">· сайт оператора · 9 ед.</span></span></li>
+      <li><span>Схема организационной структуры <span class="muted">· годовой отчёт · без функций</span></span></li></ul>
+      <p>Подтвердите использование или укажите, где искать ещё. Ответственность за выбор источников на пользователе.</p>
+      <div class="row-actions"><button class="btn" id="ops-ok">Подтвердить</button></div>
+      <div class="field"><label for="ops-where" class="hint">Где искать ещё</label>
+      <input id="ops-where" class="text-in" type="text" placeholder="Ссылка или название документа"></div></div>`;
+    $("#ops-findings").innerHTML = "";
+    $("#ops-ok").onclick = () => { opsConfirmed = true; renderOps(); };
+  } else {
+    $("#ops-lead").innerHTML = "<strong>1 расхождение с практикой других операторов.</strong> Сравнены созданные и преобразованные подразделения.";
+    $("#ops-docs").innerHTML = "";
+    $("#ops-findings").innerHTML = FINDINGS.filter(f => f.type === "benchmark").map(card).join("");
+  }
+}
+function renderExternal(sub){
+  document.querySelectorAll("[data-ext]").forEach(el => el.hidden = el.dataset.ext !== sub);
+  document.querySelectorAll('[data-page="external"] [data-sub]').forEach(l =>
+    l.toggleAttribute("aria-current", false));
+  document.querySelector(`[data-page="external"] [data-sub="${sub}"]`).setAttribute("aria-current","page");
+  sub === "npa" ? renderNpa() : renderOps();
+}
+
+/* ---------- Чат ---------- */
+const S = (doc, block, clause) => srcBtn({document:doc, block, clause, quote:""});
+const ANSWERS = {
+  "Что изменилось?": `Создан Центр цифровой трансформации, упразднён Отдел режима, Департамент ИБ и Отдел кадров преобразованы. Управление IT, закупок и Служба внутреннего аудита сохранены.
+    <div class="srcs">${S("after","Структура","1.1")}${S("after","Структура","1.3")}</div>`,
+  "Насколько сократился штат?": `С 214 до 198 ед. — на 16 (−7,5%). Больше всего сокращено Управление IT: с 40 до 8 ед.
+    <div class="srcs">${S("after","Кадры","К.1")}${S("after","Кадры","К.2")}</div>`,
+  "Какие функции потеряны?": `Организация мобилизационной подготовки: была у Отдела режима, после реорганизации не закреплена ни за кем. Мониторинг инцидентов ИБ не распределён по управлениям.
+    <div class="srcs">${S("before","ИБ и режим","3.7")}${S("after","ИБ и режим","2.4")}</div>`,
+  "Где дублирование?": `ИТ-стратегия — у Управления IT и Центра цифровой трансформации. Обучение по ИБ — у Департамента ИБ и режима и Департамента по работе с персоналом.
+    <div class="srcs">${S("after","IT и цифровизация","4.2")}${S("after","IT и цифровизация","5.1")}${S("after","ИБ и режим","2.6")}${S("after","Персонал","6.5")}</div>`
+};
+const NO_ANSWER = `В загруженных документах ответа нет. Дозагрузите документ, где это описано, — на странице загрузки или во «Внешних факторах».`;
+function say(role, html){
+  const m = document.createElement("div");
+  m.className = "msg " + role;
+  m.innerHTML = html;
+  $("#msgs").appendChild(m);
+  m.scrollIntoView({block:"nearest"});
+}
+function ask(q){
+  if (!q.trim()) return;
+  say("user", esc(q));
+  setTimeout(() => say("bot", ANSWERS[q.trim()] || NO_ANSWER), 250);
+}
+$("#chips").innerHTML = Object.keys(ANSWERS).map(q => `<button class="chip" type="button">${q}</button>`).join("");
+$("#chips").addEventListener("click", e => { const c = e.target.closest(".chip"); if (c) ask(c.textContent); });
+$("#composer").addEventListener("submit", e => { e.preventDefault(); ask($("#q").value); $("#q").value = ""; });
+say("bot", "Задайте вопрос по документам «До» и «После» или выберите готовый ниже.");
+
+/* ---------- Загрузка и статус ---------- */
+let statusTimer = null;
+$("#start").onclick = () => { location.hash = "status"; };
+function runStatus(){
+  const fname = (id, fallback) => { const f = $(id).files; return f && f.length ? f[0].name : fallback; };
+  const docs = [
+    "До: " + fname("#f-before", "Положение_и_штатка_2024.docx"),
+    "После: " + fname("#f-after", "Положение_и_штатка_2025.pdf")
+  ];
+  const npaUp = $("#f-npa").files.length, opsUp = $("#f-ops").files.length;
+  if (npaUp) docs.push(`НПА: ${npaUp} файл(ов)`);
+  if (opsUp) docs.push(`Операторы: ${opsUp} файл(ов)`);
+  const bg = [];
+  if (!npaUp) bg.push("НПА не загружены — агент ищет их на adilet.zan.kz");
+  if (!opsUp) bg.push("документы операторов не загружены — агент ищет по названию");
+  $("#bg-note").textContent = bg.length ? "В фоне: " + bg.join("; ") + ". Это не блокирует переход." : "";
+  const N = 4; let step = 0;
+  const draw = () => {
+    $("#status-rows").innerHTML = docs.map((d, di) => `<tr><td>${esc(d)}</td>` +
+      Array.from({length:N}, (_, k) => {
+        const s = step - di;              // документы стартуют с небольшим сдвигом
+        const cls = k < s ? "done" : k === s ? "run" : "";
+        const txt = k < s ? "готово" : k === s ? "в работе" : "ждёт";
+        return `<td><span class="stage ${cls}"><i></i>${txt}</span></td>`;
+      }).join("") + `</tr>`).join("");
+  };
+  $("#status-done").hidden = true;
+  draw();
+  clearInterval(statusTimer);
+  statusTimer = setInterval(() => {
+    step++; draw();
+    if (step >= N + docs.length - 1){
+      clearInterval(statusTimer);
+      $("#status-done").hidden = false;
+      statusTimer = setTimeout(() => { if (location.hash === "#status") location.hash = "changes"; }, 1200);
+    }
+  }, 600);
+}
+
+/* ---------- Маршрутизация ---------- */
+function route(){
+  const h = (location.hash || "#upload").slice(1);
+  const [page, sub] = h.split("-");
+  const known = ["upload","status","changes","analysis","external","chat"];
+  const p = known.includes(page) ? page : "upload";
+  document.querySelectorAll("[data-page]").forEach(s => s.hidden = s.dataset.page !== p);
+  $("#topbar").hidden = p === "upload" || p === "status";
+  document.querySelectorAll(".tabs a").forEach(a =>
+    a.dataset.tab === p ? a.setAttribute("aria-current","page") : a.removeAttribute("aria-current"));
+  if (p !== "status"){ clearInterval(statusTimer); clearTimeout(statusTimer); }
+  if (p === "status") runStatus();
+  if (p === "analysis") renderAnalysis(ANALYSIS[sub] ? sub : "loss");
+  if (p === "external") renderExternal(sub === "operators" ? "operators" : "npa");
+  if (p !== "changes") document.querySelectorAll(".row.hl").forEach(r => r.classList.remove("hl"));
+  window.scrollTo(0, 0);
+  if (p === "changes") highlightPending();
+}
+renderChanges();
+window.addEventListener("hashchange", route);
+route();
+</script>
+</body>
+</html>

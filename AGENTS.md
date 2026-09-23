@@ -8,6 +8,7 @@ Read these before doing anything:
 
 | Document | What it covers |
 |---|---|
+| [`docs/spec/`](docs/spec/README.md) | Product spec: `tz_site.md` (features, invariants, P0–P3 priorities), `prototype.html` (mockup of the whole site), `visual_compare.html` (reworked «Изменения → Визуал» screen); README says how to use them |
 | [`.agents/guidelines.md`](.agents/guidelines.md) | Coding conventions, ruff/mypy rule set, validation commands |
 | [`.agents/git-workflow.md`](.agents/git-workflow.md) | Branching, PRs, conflict resolution, six-hour cadence |
 | [`.agents/frontend.md`](.agents/frontend.md) | Frontend scope, UI elements, Svelte stack + Svelte MCP, API contract |
@@ -32,7 +33,7 @@ Shared files need a heads-up in team chat before changing them.
 |---|---|---|
 | Frontend (SvelteKit UI) | Sula | `frontend/`, `.agents/frontend.md` |
 | Backend & DB | Alim | `src/la_rp_peace/` (except `analysis/`), `tests/` (except `tests/analysis/`), `.env.example`, `.agents/backend.md` |
-| Methodology & analysis | Marinadec | `docs/methodology/`, `src/la_rp_peace/analysis/`, `tests/analysis/` |
+| Methodology & analysis | Marinadec | `methodology/`, `src/la_rp_peace/analysis/`, `tests/analysis/` |
 | Shared (ask first) | everyone | `pyproject.toml`, `uv.lock`, `.mcp.json`, `test_data/`, shared models/interfaces, API contract (`.agents/frontend.md` §4) |
 
 ## Non-negotiables

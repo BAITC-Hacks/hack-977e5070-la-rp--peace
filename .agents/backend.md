@@ -1,7 +1,7 @@
 # Backend Spec
 
 **Owner:** Alim (backend, DB). **Methodology:** Marinadec — *how* units and functions are
-compared is theirs (`docs/methodology/`, `src/la_rp_peace/analysis/`). The backend owns
+compared is theirs (`methodology/`, `src/la_rp_peace/analysis/`). The backend owns
 everything around it: ingestion, storage, the HTTP API, running analyses, and serving results.
 Source of truth: the organiser's tech task (docx in the repo root). API contract shared with
 the frontend: [`frontend.md`](frontend.md) §4.
