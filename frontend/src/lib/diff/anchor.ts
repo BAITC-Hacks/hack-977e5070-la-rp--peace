@@ -31,3 +31,12 @@ export function parseNodeHash(hash: string): number | null {
 export function compareQuery(before: number, after: number): `?${string}` {
 	return `?${new URLSearchParams({ before: String(before), after: String(after) })}`;
 }
+
+/** Route of the Word view of two documents, scrolled to `nodeId` (a node of either of them). */
+export function compareHref(
+	before: number,
+	after: number,
+	nodeId: number
+): `/compare?${string}#${string}` {
+	return `/compare${compareQuery(before, after)}#${nodeAnchorId(nodeId)}`;
+}
