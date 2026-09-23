@@ -1,3 +1,5 @@
+import io
+import sys
 from collections.abc import Iterator
 
 import pytest
@@ -67,3 +69,15 @@ def test_non_level_method_names_do_not_raise(method: str) -> None:
     logger = get_logger("x")
 
     getattr(logger, method)("event_emitted")
+
+
+def test_cyrillic_values_do_not_crash_on_a_legacy_code_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding="cp1252")
+    monkeypatch.setattr(sys, "stdout", stream)
+
+    configure_logging()
+    get_logger("x").info("document_parsed", filename="Положение.docx")
+    stream.flush()
+
+    assert "Положение.docx" in raw.getvalue().decode("utf-8")

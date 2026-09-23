@@ -1,5 +1,8 @@
 """Configure structured console logging for the application."""
 
+import io
+import sys
+
 import structlog
 import structlog.stdlib
 import structlog.typing
@@ -23,6 +26,13 @@ _METHOD_LEVELS = {
 }
 
 
+def _make_stdout_unicode_safe() -> None:
+    # A redirected stdout on Windows uses the ANSI code page (cp1252), which cannot encode
+    # Cyrillic: logging a Russian file name would raise inside the request handler.
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def configure_logging(level: str = "INFO") -> None:
     """Configure structured console logging once.
 
@@ -40,6 +50,7 @@ def configure_logging(level: str = "INFO") -> None:
     if structlog.is_configured():
         return
 
+    _make_stdout_unicode_safe()
     minimum_level = _LEVELS[normalized_level]
 
     def _filter_level(
