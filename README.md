@@ -6,3 +6,5 @@ Hackathon team repository for la(rp)-peace
 ## Team
 
 la(rp)-peace
+
+Test line added to verify commit workflow.
