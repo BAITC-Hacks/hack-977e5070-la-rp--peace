@@ -10,9 +10,11 @@
 		rows: readonly DocumentProgress[];
 		/** Called once, «Готово» having been on screen for a moment, to open the results. */
 		ondone: () => void;
+		/** What happens next, shown after «Готово.». */
+		doneText?: string;
 	}
 
-	let { rows, ondone }: Props = $props();
+	let { rows, ondone, doneText = 'Открываю структуру документов…' }: Props = $props();
 
 	/** How long «Готово» stays on screen before `ondone`. */
 	const DONE_DELAY_MS = 1200;
@@ -100,7 +102,7 @@
 	{#if status === 'done'}
 		<p role="status" {@attach openResultsLater}>
 			<strong class="font-semibold">Готово.</strong>
-			<span class="text-muted">Открываю структуру документов…</span>
+			<span class="text-muted">{doneText}</span>
 		</p>
 	{/if}
 </div>
