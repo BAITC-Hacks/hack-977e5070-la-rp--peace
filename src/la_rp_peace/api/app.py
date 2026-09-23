@@ -39,8 +39,13 @@ def _default_model(settings: Settings) -> ChatModel | None:
 def _post_parse_stages(settings: Settings, model: ChatModel) -> list[PostParseStage]:
     """Stages chained after stage 1, in order; each later stage builds on the earlier ones."""
     return [
-        EntityStage(model, settings.entity_block_max_chars, settings.entity_retries),
-        ActivityStage(model, max_chars=settings.activity_block_max_chars, retries=settings.activity_retries),
+        EntityStage(model, settings.entity_block_max_chars, settings.entity_retries, settings.entity_parallel),
+        ActivityStage(
+            model,
+            max_chars=settings.activity_block_max_chars,
+            retries=settings.activity_retries,
+            parallel=settings.activity_parallel,
+        ),
     ]
 
 

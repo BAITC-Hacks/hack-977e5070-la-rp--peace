@@ -9,6 +9,7 @@ ends as an *error* — never as a negative verdict.
 
 import json
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
@@ -131,6 +132,7 @@ def ask_in_batches(
     check: AnswerCheck,
     retries: int,
     batch_size: int = BATCH_SIZE,
+    parallel: int = 1,
 ) -> dict[str, Outcome]:
     """Ask verification questions in batches and collect one outcome per question.
 
@@ -141,6 +143,7 @@ def ask_in_batches(
         check: Validates one answer object for its question; returns problems (empty = valid).
         retries: Corrected replies to request per batch after the first.
         batch_size: Questions per request (10 by the methodology).
+        parallel: Batches asked at once; batches are independent.
 
     Returns:
         Outcome by question id, for every question.
@@ -151,9 +154,10 @@ def ask_in_batches(
     ids = [question.question_id for question in questions]
     if len(ids) != len(set(ids)):
         raise ValueError("question_id must be unique")
+    batches = [_Batch(questions[start : start + batch_size], check) for start in range(0, len(questions), batch_size)]
+    with ThreadPoolExecutor(max_workers=max(1, parallel), thread_name_prefix="verification") as pool:
+        list(pool.map(lambda batch: _ask_batch(model, system_prompt, batch, retries), batches))
     outcomes: dict[str, Outcome] = {}
-    for start in range(0, len(questions), batch_size):
-        batch = _Batch(questions[start : start + batch_size], check)
-        _ask_batch(model, system_prompt, batch, retries)
+    for batch in batches:
         outcomes.update(batch.done)
     return outcomes

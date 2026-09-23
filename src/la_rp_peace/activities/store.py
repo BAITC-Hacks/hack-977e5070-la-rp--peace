@@ -92,7 +92,9 @@ def _fill(row: ActivityRecord, record: CheckedRecord) -> None:
     row.review_status = review_status(record).value
 
 
-def _write_record(session: Session, document_id: int, row: ActivityRecord, record: CheckedRecord) -> None:
+def _write_record(
+    session: Session, document_id: int, row: ActivityRecord, record: CheckedRecord, provision_issues: bool
+) -> None:
     _fill(row, record)
     session.add(row)
     session.flush()
@@ -110,7 +112,7 @@ def _write_record(session: Session, document_id: int, row: ActivityRecord, recor
         )
         for source in record.sources
     )
-    _add_issues(session, document_id, record_issues(record), row.id)
+    _add_issues(session, document_id, record_issues(record, provision_level=provision_issues), row.id)
 
 
 def _replace_block(
@@ -119,10 +121,13 @@ def _replace_block(
     pool: dict[RecordKey, list[ActivityRecord]] = {}
     for row in previous:
         pool.setdefault(_key(row.entity_id, row.record_type, row.formulation), []).append(row)
+    provisions_with_issues: set[str] = set()
     for record in outcome.records:
         matches = pool.get(_key(record.entity_id, record.record_type.value, record.formulation))
         row = matches.pop(0) if matches else ActivityRecord(document_id=document_id, block_node_id=outcome.root_id)
-        _write_record(session, document_id, row, record)
+        key = provision_key(outcome.root_id, record)
+        _write_record(session, document_id, row, record, provision_issues=key not in provisions_with_issues)
+        provisions_with_issues.add(key)
     _delete_records(session, [row.id for rows in pool.values() for row in rows])
 
 

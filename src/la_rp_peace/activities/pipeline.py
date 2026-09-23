@@ -3,12 +3,14 @@
 The stage reads the document tree (stage 1) and the entity registry (stage 2) from the
 database only. It runs when stage 2 finished (``done`` or ``needs_review``); otherwise the
 document stays ``not_started`` and stale stage 3 rows are removed, because they would refer to
-a registry that no longer holds. Blocks are processed sequentially; the run is saved in one
+a registry that no longer holds. Blocks only read the fixed registry, so they are asked in
+parallel (``parallel`` at a time) and collected in document order; the run is saved in one
 transaction where each block's verified result replaces that block's previous records
 (``store.save_outcomes``).
 """
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,7 +20,7 @@ from la_rp_peace.activities.extract import BlockOutcome, extract_block
 from la_rp_peace.activities.prompt import block_messages, entity_key, registry_view
 from la_rp_peace.activities.store import clear_activities, save_outcomes
 from la_rp_peace.activities.verify import BlockScope, RegistryEntry
-from la_rp_peace.entities.blocks import plan_blocks
+from la_rp_peace.entities.blocks import Block, plan_blocks
 from la_rp_peace.entities.verify import SourceVerifier
 from la_rp_peace.enums import ActivitiesStatus, ActivityIssueType, EntitiesStatus
 from la_rp_peace.llm import ChatModel
@@ -36,17 +38,19 @@ class ActivityStage:
 
     name = "activities"
 
-    def __init__(self, model: ChatModel, max_chars: int, retries: int) -> None:
+    def __init__(self, model: ChatModel, max_chars: int, retries: int, parallel: int = 1) -> None:
         """Configure the stage.
 
         Args:
             model: Chat model for the block requests.
             max_chars: Size limit of one block's rendered text.
             retries: Corrected answers to request per block after the first.
+            parallel: Blocks asked at once (they are independent given the registry).
         """
         self._model = model
         self._max_chars = max_chars
         self._retries = retries
+        self._parallel = max(1, parallel)
 
     def run(self, session: Session, document_id: int) -> None:
         """Extract, check and store the document's activities, committing status and results."""
@@ -79,14 +83,16 @@ class ActivityStage:
         verifier = SourceVerifier({node.id: node.text for node in nodes})
         registry = {entity_key(entity.id): RegistryEntry(entity.id, entity.name) for entity in entities}
         registry_text = registry_view(entities)
-        outcomes: list[BlockOutcome] = []
-        for number, block in enumerate(blocks, start=1):
+
+        def read(numbered: tuple[int, Block]) -> BlockOutcome:
+            number, block = numbered
             own = frozenset(line.node_id for line in block.lines if not line.context)
             scope = BlockScope(verifier, registry, own)
             opening = block_messages(document, registry_text, block, number, len(blocks))
-            path = places[block.root_id].path
-            outcomes.append(extract_block(self._model, opening, block, path, scope, self._retries))
-        return outcomes
+            return extract_block(self._model, opening, block, places[block.root_id].path, scope, self._retries)
+
+        with ThreadPoolExecutor(max_workers=self._parallel, thread_name_prefix="activities") as pool:
+            return list(pool.map(read, enumerate(blocks, start=1)))
 
     def fail(self, session: Session, document_id: int, message: str) -> None:
         """Mark the stage failed for the document with a blocking issue."""

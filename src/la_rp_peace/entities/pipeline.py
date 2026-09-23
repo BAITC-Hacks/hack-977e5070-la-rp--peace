@@ -11,14 +11,16 @@ objects no longer found are removed, new ones are added. Only this document is r
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from la_rp_peace.entities.blocks import plan_blocks
+from la_rp_peace.entities.blocks import Block, plan_blocks
 from la_rp_peace.entities.checks import StageReport, finish
 from la_rp_peace.entities.consolidate import consolidate
-from la_rp_peace.entities.extract import BlockMark, extract_block
+from la_rp_peace.entities.extract import BlockMark, RegistrySnapshot, apply_block, ask_block
 from la_rp_peace.entities.previous import PreviousResult, load_previous
 from la_rp_peace.entities.prompt import DocumentCard
 from la_rp_peace.entities.registry import Evidence, RegisteredEntity, Registry
@@ -238,17 +240,32 @@ class EntityStage:
 
     name = "entities"
 
-    def __init__(self, model: ChatModel, max_chars: int, retries: int) -> None:
+    def __init__(self, model: ChatModel, max_chars: int, retries: int, parallel: int = 1) -> None:
         """Configure the stage.
 
         Args:
             model: The chat model.
             max_chars: Size limit of one block's rendered text.
             retries: Corrected answers to request after the first, per call.
+            parallel: Blocks asked at once. Blocks are read in waves of this size against the
+                registry built by the earlier waves; answers are applied in document order and
+                duplicates within a wave are merged by the final review.
         """
         self._model = model
         self._max_chars = max_chars
         self._retries = retries
+        self._parallel = max(1, parallel)
+
+    def _read_blocks(self, card: DocumentCard, blocks: list[Block], registry: Registry) -> list[BlockMark]:
+        marks: list[BlockMark] = []
+        with ThreadPoolExecutor(max_workers=self._parallel, thread_name_prefix="entities") as pool:
+            for start in range(0, len(blocks), self._parallel):
+                wave = blocks[start : start + self._parallel]
+                snapshot = RegistrySnapshot.of(registry)
+                ask = partial(ask_block, self._model, card, registry=registry, snapshot=snapshot, retries=self._retries)
+                outcomes = list(pool.map(lambda block, ask=ask: ask(block=block), wave))
+                marks += [apply_block(registry, block, outcome) for block, outcome in zip(wave, outcomes, strict=True)]
+        return marks
 
     def run(self, session: Session, document_id: int) -> None:
         """Extract, review, check and save the document's entities."""
@@ -266,7 +283,7 @@ class EntityStage:
         session.commit()
         log.info("entities_started", document_id=document_id, blocks=len(blocks), previous=len(previous.entities))
         registry = Registry(SourceVerifier(texts))
-        marks = [extract_block(self._model, card, block, registry, self._retries) for block in blocks]
+        marks = self._read_blocks(card, blocks, registry)
         marks = keep_failed_blocks(registry, previous, marks)
         consolidate(self._model, card, registry, places, texts, self._retries)
         report = finish(registry, blocks, marks)

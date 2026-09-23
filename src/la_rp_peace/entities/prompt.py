@@ -127,6 +127,9 @@ References and the registry:
 - block_status: "found" if you return mentions or relations; "none" if the block names no
   organisational objects; "needs_clarification" if something could not be settled (explain in
   "unclear").
+- Keep answers lean: "unclear" only for questions a reviewer must actually decide (not for
+  confirmations or restatements), one short item per open question; quotes are the shortest
+  exact fragments that support the claim; only relations the text states explicitly.
 
 """
     + _SHARED_RULES

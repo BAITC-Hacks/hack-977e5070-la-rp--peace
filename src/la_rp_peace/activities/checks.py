@@ -31,12 +31,21 @@ class IssueDraft:
     is_blocking: bool = False
 
 
-def record_issues(record: CheckedRecord) -> list[IssueDraft]:
-    """Issues of one record: unresolved participant, unclear participation, type or specificity, notes."""
+def record_issues(record: CheckedRecord, provision_level: bool = True) -> list[IssueDraft]:
+    """Issues of one record: unresolved participant, unclear participation, type or specificity, notes.
+
+    Args:
+        record: The record.
+        provision_level: Include the issues that belong to the whole provision (participation,
+            type, specificity, notes). Every record split from a provision shares them, so they
+            are stored once per provision rather than once per participant.
+    """
     issues: list[IssueDraft] = []
     if record.entity_id is None:
         message = f"Участник «{record.designation}» не найден в реестре объектов документа: {record.note}"
         issues.append(IssueDraft(ActivityIssueType.UNRESOLVED_ENTITY, message))
+    if not provision_level:
+        return issues
     if record.participation is Participation.UNCLEAR:
         message = f"Неясен характер участия: «{record.participant_designation}»"
         issues.append(IssueDraft(ActivityIssueType.UNCLEAR_PARTICIPATION, message))
