@@ -1,11 +1,31 @@
 import type { DocumentsApi } from '$lib/api/client';
 import { ApiError } from '$lib/api/errors';
-import type { ApiDocument, DocSet, DocType } from '$lib/api/types';
+import type { DocSet, DocumentOut, ParseStatus } from '$lib/api/types';
 
 import { isAccepted } from './files';
 
-/** `processing`: all bytes sent, the backend is parsing the document. */
-export type UploadStatus = 'uploading' | 'processing' | 'done' | 'failed';
+/** How often a document is re-read while the backend parses it. */
+export const POLL_INTERVAL_MS = 2000;
+
+/**
+ * `parsing`: the backend has stored the file and parses it in the background.
+ * `parsed` and `needs_review`: parsing has ended with that outcome.
+ */
+export type UploadStatus = 'uploading' | 'parsing' | 'parsed' | 'needs_review' | 'failed';
+
+const STATUS_OF: Record<ParseStatus, UploadStatus> = {
+	pending: 'parsing',
+	parsed: 'parsed',
+	validated: 'parsed',
+	needs_review: 'needs_review'
+};
+
+const STATUS_LABELS: Record<Exclude<UploadStatus, 'uploading'>, string> = {
+	parsing: 'Разбирается…',
+	parsed: 'Разобран',
+	needs_review: 'Требует проверки',
+	failed: 'Ошибка'
+};
 
 /** One file dropped into an upload zone, from the first byte sent until it is removed. */
 export class UploadItem {
@@ -15,10 +35,10 @@ export class UploadItem {
 	status = $state<UploadStatus>('uploading');
 	/** Share of bytes sent, 0..1. */
 	progress = $state(0);
-	/** The stored document once the backend has accepted and parsed the file. */
-	document = $state.raw<ApiDocument | null>(null);
+	/** The stored document, re-read while the backend parses it. */
+	document = $state.raw<DocumentOut | null>(null);
 	error = $state<string | null>(null);
-	/** Whether the failed upload can succeed if sent again (network or server error). */
+	/** Whether the failed step can succeed if repeated (network or server error). */
 	retriable = $state(false);
 	/** A type change or deletion is in flight. */
 	busy = $state(false);
@@ -28,8 +48,21 @@ export class UploadItem {
 		this.set = set;
 	}
 
-	get inFlight(): boolean {
-		return this.status === 'uploading' || this.status === 'processing';
+	/** Parsing has ended, so the document's structure and type can be looked at. */
+	get parsed(): boolean {
+		return this.status === 'parsed' || this.status === 'needs_review';
+	}
+
+	/** Until the backend answers the upload there is no document to delete yet. */
+	get removable(): boolean {
+		return this.status !== 'uploading' && !this.busy;
+	}
+
+	get statusLabel(): string {
+		if (this.status === 'uploading') {
+			return `Загрузка ${Math.round(this.progress * 100)}%`;
+		}
+		return STATUS_LABELS[this.status];
 	}
 }
 
@@ -41,10 +74,15 @@ function messageOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+function delay(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Files of the new-analysis screen across all document sets, kept in sync with the backend. */
 export class UploadSession {
 	items = $state<UploadItem[]>([]);
 	readonly #api: DocumentsApi;
+	#disposed = false;
 
 	constructor(api: DocumentsApi) {
 		this.#api = api;
@@ -69,23 +107,30 @@ export class UploadSession {
 		return rejected;
 	}
 
+	/** Repeats the failed step: sends the file again, or resumes following a stored document. */
 	retry(item: UploadItem): void {
-		if (item.status === 'failed') {
-			void this.#upload(item);
+		if (item.status !== 'failed') {
+			return;
 		}
+		const { document } = item;
+		void (document === null ? this.#upload(item) : this.#follow(item, document));
 	}
 
 	/** Changes the document type at once and reverts it if the backend refuses. */
-	async setType(item: UploadItem, docType: DocType): Promise<void> {
+	async setType(item: UploadItem, documentType: string): Promise<void> {
 		const previous = item.document;
-		if (previous === null || item.busy || previous.doc_type === docType) {
+		const value = documentType.trim();
+		if (previous === null || !item.parsed || item.busy) {
+			return;
+		}
+		if (value === '' || value === previous.document_type) {
 			return;
 		}
 		item.busy = true;
 		item.error = null;
-		item.document = { ...previous, doc_type: docType };
+		item.document = { ...previous, document_type: value };
 		try {
-			item.document = await this.#api.setType(previous.id, docType);
+			item.document = await this.#api.setType(previous.id, value);
 		} catch (error) {
 			item.document = previous;
 			item.error = messageOf(error);
@@ -94,9 +139,9 @@ export class UploadSession {
 		}
 	}
 
-	/** Deletes the stored document, if any, then drops the file from its zone. */
+	/** Deletes the stored document, if any, then drops the file, which also ends its polling. */
 	async remove(item: UploadItem): Promise<void> {
-		if (item.inFlight || item.busy) {
+		if (!item.removable) {
 			return;
 		}
 		if (item.document !== null) {
@@ -116,23 +161,64 @@ export class UploadSession {
 		this.items = this.items.filter((other) => other !== item);
 	}
 
+	/** Stops polling for every file, e.g. when the page is left. */
+	dispose(): void {
+		this.#disposed = true;
+	}
+
+	/** Whether the file is still on screen, so its polling should go on. */
+	#tracks(item: UploadItem): boolean {
+		return !this.#disposed && this.items.includes(item);
+	}
+
+	#fail(item: UploadItem, error: unknown): void {
+		item.status = 'failed';
+		item.error = messageOf(error);
+		item.retriable = error instanceof ApiError && error.retriable;
+	}
+
 	async #upload(item: UploadItem): Promise<void> {
 		item.status = 'uploading';
 		item.progress = 0;
 		item.error = null;
 		item.retriable = false;
+		let document: DocumentOut;
 		try {
-			item.document = await this.#api.upload(item.file, item.set, (fraction) => {
+			document = await this.#api.upload(item.file, item.set, (fraction) => {
 				item.progress = fraction;
-				if (fraction >= 1) {
-					item.status = 'processing';
-				}
 			});
-			item.status = 'done';
 		} catch (error) {
-			item.status = 'failed';
-			item.error = messageOf(error);
-			item.retriable = error instanceof ApiError && error.retriable;
+			this.#fail(item, error);
+			return;
 		}
+		item.document = document;
+		await this.#follow(item, document);
+	}
+
+	/** Re-reads the document every `POLL_INTERVAL_MS` while it is `pending`. */
+	async #follow(item: UploadItem, stored: DocumentOut): Promise<void> {
+		item.error = null;
+		item.retriable = false;
+		let document = stored;
+		while (document.parse_status === 'pending') {
+			item.status = 'parsing';
+			await delay(POLL_INTERVAL_MS);
+			if (!this.#tracks(item)) {
+				return;
+			}
+			try {
+				document = await this.#api.get(document.id);
+			} catch (error) {
+				if (this.#tracks(item)) {
+					this.#fail(item, error);
+				}
+				return;
+			}
+			if (!this.#tracks(item)) {
+				return;
+			}
+			item.document = document;
+		}
+		item.status = STATUS_OF[document.parse_status];
 	}
 }

@@ -3,9 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { ApiError, errorMessage } from './errors';
 
 describe('errorMessage', () => {
-	it('uses a string detail as is', () => {
-		const body = { detail: 'Формат .doc не поддерживается: пересохраните как .docx' };
-		expect(errorMessage(body, 415)).toBe(body.detail);
+	// Messages as the upload endpoint raises them (src/la_rp_peace/api/documents.py).
+	it.each([
+		[503, 'Разбор недоступен: не заданы OPENAI_API_KEY и OPENAI_MODEL'],
+		[413, 'Файл больше 20 МБ'],
+		[415, 'Формат .doc не поддерживается: пересохраните файл как .docx']
+	])('uses the string detail of HTTP %i as is', (status, detail) => {
+		expect(errorMessage({ detail }, status)).toBe(detail);
 	});
 
 	it('joins the messages of a validation error', () => {

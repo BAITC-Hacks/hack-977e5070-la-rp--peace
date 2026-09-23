@@ -1,28 +1,16 @@
-import type { DocSet, DocType } from './api/types';
+import type { DocSet } from './api/types';
 
-/** Document types in the order the type select lists them. */
-export const DOC_TYPES: readonly DocType[] = [
-	'org_structure',
-	'unit_regulation',
-	'job_description',
-	'order',
-	'internal_regulation',
-	'unknown'
+/**
+ * Suggestions for the document type field. The backend stores the type as free text read from
+ * the document, so these only speed up typing the common kinds (.agents/frontend.md §2.1).
+ */
+export const DOC_TYPE_SUGGESTIONS: readonly string[] = [
+	'Оргструктура',
+	'Положение о подразделении',
+	'Должностная инструкция',
+	'Распорядительный документ',
+	'ВНД'
 ];
-
-export const DOC_TYPE_LABELS: Record<DocType, string> = {
-	org_structure: 'Оргструктура',
-	unit_regulation: 'Положение о подразделении',
-	job_description: 'Должностная инструкция',
-	order: 'Распорядительный документ',
-	internal_regulation: 'ВНД',
-	unknown: 'Не определено'
-};
-
-/** Narrows an arbitrary string (e.g. a `<select>` value) to a known document type. */
-export function isDocType(value: string): value is DocType {
-	return (DOC_TYPES as readonly string[]).includes(value);
-}
 
 export interface DocSetInfo {
 	set: DocSet;

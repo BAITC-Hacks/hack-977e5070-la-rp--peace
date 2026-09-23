@@ -1,40 +1,60 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DocumentsApi } from '$lib/api/client';
 import { ApiError } from '$lib/api/errors';
-import type { ApiDocument, DocSet, DocType } from '$lib/api/types';
+import type { DocSet, DocumentOut } from '$lib/api/types';
 
-import { UploadSession } from './session.svelte';
+import { POLL_INTERVAL_MS, UploadSession } from './session.svelte';
 
-function storedDocument(
-	file: File,
-	set: DocSet,
-	overrides: Partial<ApiDocument> = {}
-): ApiDocument {
+const DOCUMENT_ID = 7;
+
+function storedDocument(overrides: Partial<DocumentOut> = {}): DocumentOut {
 	return {
-		id: `id-${file.name}`,
-		filename: file.name,
-		set,
-		doc_type: 'unit_regulation',
-		format: 'docx',
+		id: DOCUMENT_ID,
+		file_name: 'Положение_ред_9.docx',
+		set: 'before',
+		source_format: 'docx',
+		file_size_bytes: 7,
+		content_sha256: 'ab12',
+		uploaded_at: '2026-09-23T10:00:00Z',
+		parse_status: 'pending',
 		title: null,
-		size: file.size,
-		clause_count: 42,
-		created_at: '2026-09-23T10:00:00Z',
+		document_type: null,
+		organization: null,
+		revision: null,
+		approved_by: null,
+		approval_document_type: null,
+		approval_number: null,
+		document_created_on: null,
+		approved_on: null,
+		effective_from: null,
+		node_count: 0,
+		blocking_issues: 0,
+		other_issues: 0,
 		...overrides
 	};
 }
 
-/** A backend double whose upload resolves as soon as the progress callback reports every byte sent. */
+const validated = storedDocument({
+	parse_status: 'validated',
+	document_type: 'Положение о подразделении',
+	node_count: 42
+});
+
+/**
+ * A backend double: the upload is accepted as `pending`, and every later read reports the
+ * document parsed.
+ */
 function fakeApi(overrides: Partial<DocumentsApi> = {}): DocumentsApi {
 	return {
 		upload: vi.fn(async (file: File, set: DocSet, onProgress: (fraction: number) => void) => {
 			onProgress(0.5);
 			onProgress(1);
-			return storedDocument(file, set);
+			return storedDocument({ file_name: file.name, set });
 		}),
-		setType: vi.fn(async (id: string, docType: DocType) =>
-			storedDocument(new File([], 'x.docx'), 'before', { id, doc_type: docType })
+		get: vi.fn(async () => validated),
+		setType: vi.fn(async (id: number, documentType: string) =>
+			storedDocument({ ...validated, id, document_type: documentType })
 		),
 		remove: vi.fn(async () => undefined),
 		...overrides
@@ -43,12 +63,26 @@ function fakeApi(overrides: Partial<DocumentsApi> = {}): DocumentsApi {
 
 const docx = (name = 'Положение_ред_9.docx') => new File(['content'], name);
 
-async function uploaded(api: DocumentsApi, set: DocSet = 'before') {
+/** Lets pending promises settle without moving the clock. */
+const settle = () => vi.advanceTimersByTimeAsync(0);
+const nextPoll = () => vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+
+async function parsedItem(api: DocumentsApi) {
 	const session = new UploadSession(api);
-	session.add(set, [docx()]);
-	await vi.waitFor(() => expect(session.items[0].status).toBe('done'));
-	return { session, item: session.items[0] };
+	session.add('before', [docx()]);
+	await nextPoll();
+	const [item] = session.items;
+	expect(item.status).toBe('parsed');
+	return { session, item };
 }
+
+beforeEach(() => {
+	vi.useFakeTimers();
+});
+
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 describe('UploadSession.add', () => {
 	it('uploads accepted files into their set and returns rejected names', async () => {
@@ -56,21 +90,20 @@ describe('UploadSession.add', () => {
 		const session = new UploadSession(api);
 
 		const rejected = session.add('after', [docx('a.pdf'), new File([''], 'notes.txt')]);
+		await settle();
 
 		expect(rejected).toEqual(['notes.txt']);
 		expect(session.itemsIn('after').map((item) => item.file.name)).toEqual(['a.pdf']);
 		expect(session.itemsIn('before')).toEqual([]);
-		await vi.waitFor(() => expect(session.items[0].status).toBe('done'));
-		expect(session.items[0].document?.id).toBe('id-a.pdf');
+		expect(session.items[0].document?.id).toBe(DOCUMENT_ID);
 		expect(api.upload).toHaveBeenCalledWith(expect.any(File), 'after', expect.any(Function));
 	});
 
-	it('reports processing once every byte is sent', () => {
-		let finish: (document: ApiDocument) => void = () => {};
+	it('shows the share of bytes sent until the backend answers', () => {
 		const api = fakeApi({
 			upload: (file, set, onProgress) => {
-				onProgress(1);
-				return new Promise((resolve) => (finish = resolve));
+				onProgress(0.42);
+				return new Promise(() => {});
 			}
 		});
 		const session = new UploadSession(api);
@@ -78,10 +111,130 @@ describe('UploadSession.add', () => {
 		session.add('before', [docx()]);
 
 		const [item] = session.items;
-		expect(item.status).toBe('processing');
-		expect(item.progress).toBe(1);
-		expect(item.inFlight).toBe(true);
-		finish(storedDocument(item.file, 'before'));
+		expect(item.status).toBe('uploading');
+		expect(item.statusLabel).toBe('Загрузка 42%');
+		expect(item.removable).toBe(false);
+	});
+});
+
+describe('UploadSession polling', () => {
+	it('follows a document from pending to validated', async () => {
+		const get = vi
+			.fn<DocumentsApi['get']>()
+			.mockResolvedValueOnce(storedDocument())
+			.mockResolvedValueOnce(validated);
+		const api = fakeApi({ get });
+		const session = new UploadSession(api);
+
+		session.add('before', [docx()]);
+		await settle();
+
+		const [item] = session.items;
+		expect(item.status).toBe('parsing');
+		expect(item.statusLabel).toBe('Разбирается…');
+		expect(get).not.toHaveBeenCalled();
+
+		await nextPoll();
+		expect(get).toHaveBeenCalledTimes(1);
+		expect(get).toHaveBeenCalledWith(DOCUMENT_ID);
+		expect(item.status).toBe('parsing');
+
+		await nextPoll();
+		expect(get).toHaveBeenCalledTimes(2);
+		expect(item.status).toBe('parsed');
+		expect(item.statusLabel).toBe('Разобран');
+		expect(item.document?.node_count).toBe(42);
+
+		await vi.advanceTimersByTimeAsync(10 * POLL_INTERVAL_MS);
+		expect(get).toHaveBeenCalledTimes(2);
+	});
+
+	it('ends in needs_review with the issue counts', async () => {
+		const review = storedDocument({
+			parse_status: 'needs_review',
+			blocking_issues: 1,
+			other_issues: 3
+		});
+		const session = new UploadSession(fakeApi({ get: vi.fn(async () => review) }));
+
+		session.add('before', [docx()]);
+		await nextPoll();
+
+		const [item] = session.items;
+		expect(item.status).toBe('needs_review');
+		expect(item.statusLabel).toBe('Требует проверки');
+		expect(item.parsed).toBe(true);
+		expect(item.document?.blocking_issues).toBe(1);
+		expect(item.document?.other_issues).toBe(3);
+	});
+
+	it('stops once the file is removed', async () => {
+		const get = vi.fn(async () => storedDocument());
+		const api = fakeApi({ get });
+		const session = new UploadSession(api);
+		session.add('before', [docx()]);
+		await nextPoll();
+		expect(get).toHaveBeenCalledTimes(1);
+
+		await session.remove(session.items[0]);
+
+		expect(api.remove).toHaveBeenCalledWith(DOCUMENT_ID);
+		expect(session.items).toEqual([]);
+		await vi.advanceTimersByTimeAsync(10 * POLL_INTERVAL_MS);
+		expect(get).toHaveBeenCalledTimes(1);
+	});
+
+	it('stops once the session is disposed', async () => {
+		const get = vi.fn(async () => storedDocument());
+		const session = new UploadSession(fakeApi({ get }));
+		session.add('before', [docx()]);
+		await settle();
+
+		session.dispose();
+
+		await vi.advanceTimersByTimeAsync(10 * POLL_INTERVAL_MS);
+		expect(get).not.toHaveBeenCalled();
+	});
+
+	it('fails on a lost connection and resumes polling on retry', async () => {
+		const get = vi
+			.fn<DocumentsApi['get']>()
+			.mockRejectedValueOnce(new ApiError('Сервер недоступен', 0))
+			.mockResolvedValueOnce(validated);
+		const api = fakeApi({ get });
+		const session = new UploadSession(api);
+		session.add('before', [docx()]);
+		await nextPoll();
+
+		const [item] = session.items;
+		expect(item.status).toBe('failed');
+		expect(item.error).toBe('Сервер недоступен');
+		expect(item.retriable).toBe(true);
+
+		session.retry(item);
+		await nextPoll();
+
+		expect(item.status).toBe('parsed');
+		expect(item.error).toBeNull();
+		expect(api.upload).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('UploadSession upload errors', () => {
+	it('keeps the file with the backend message when parsing is not configured', async () => {
+		const message = 'Разбор недоступен: не заданы OPENAI_API_KEY и OPENAI_MODEL';
+		const api = fakeApi({ upload: vi.fn().mockRejectedValue(new ApiError(message, 503)) });
+		const session = new UploadSession(api);
+
+		session.add('before', [docx()]);
+		await settle();
+
+		const [item] = session.items;
+		expect(item.status).toBe('failed');
+		expect(item.error).toBe(message);
+		expect(item.retriable).toBe(true);
+		expect(item.document).toBeNull();
+		expect(api.get).not.toHaveBeenCalled();
 	});
 
 	it('marks a failed upload retriable only for network and server errors', async () => {
@@ -89,61 +242,83 @@ describe('UploadSession.add', () => {
 			upload: vi
 				.fn()
 				.mockRejectedValueOnce(new ApiError('Формат .doc не поддерживается', 415))
+				.mockRejectedValueOnce(new ApiError('Файл больше 20 МБ', 413))
 				.mockRejectedValueOnce(new ApiError('Сервер недоступен', 0))
 		});
 		const session = new UploadSession(api);
 
-		session.add('before', [docx('old.doc'), docx('b.docx')]);
+		session.add('before', [docx('old.doc'), docx('big.pdf'), docx('b.docx')]);
+		await settle();
 
-		await vi.waitFor(() =>
-			expect(session.items.every((item) => item.status === 'failed')).toBe(true)
-		);
-		const [unsupported, offline] = session.items;
+		const [unsupported, tooLarge, offline] = session.items;
+		expect(session.items.every((item) => item.status === 'failed')).toBe(true);
 		expect(unsupported.error).toBe('Формат .doc не поддерживается');
 		expect(unsupported.retriable).toBe(false);
+		expect(tooLarge.retriable).toBe(false);
 		expect(offline.retriable).toBe(true);
 	});
-});
 
-describe('UploadSession.retry', () => {
-	it('sends a failed file again', async () => {
+	it('sends a failed file again on retry', async () => {
 		const upload = vi
 			.fn<DocumentsApi['upload']>()
 			.mockRejectedValueOnce(new ApiError('Сервер недоступен', 0))
-			.mockImplementationOnce(async (file, set) => storedDocument(file, set));
+			.mockImplementationOnce(async () => storedDocument());
 		const session = new UploadSession(fakeApi({ upload }));
 		session.add('before', [docx()]);
-		await vi.waitFor(() => expect(session.items[0].status).toBe('failed'));
+		await settle();
+		expect(session.items[0].status).toBe('failed');
 
 		session.retry(session.items[0]);
+		await nextPoll();
 
-		await vi.waitFor(() => expect(session.items[0].status).toBe('done'));
+		expect(session.items[0].status).toBe('parsed');
 		expect(session.items[0].error).toBeNull();
 		expect(upload).toHaveBeenCalledTimes(2);
 	});
 });
 
 describe('UploadSession.setType', () => {
-	it('stores the type the backend confirms', async () => {
+	it('stores the trimmed type the backend confirms', async () => {
 		const api = fakeApi();
-		const { session, item } = await uploaded(api);
+		const { session, item } = await parsedItem(api);
 
-		await session.setType(item, 'job_description');
+		await session.setType(item, '  Должностная инструкция ');
 
-		expect(api.setType).toHaveBeenCalledWith('id-Положение_ред_9.docx', 'job_description');
-		expect(item.document?.doc_type).toBe('job_description');
+		expect(api.setType).toHaveBeenCalledWith(DOCUMENT_ID, 'Должностная инструкция');
+		expect(item.document?.document_type).toBe('Должностная инструкция');
 		expect(item.busy).toBe(false);
+	});
+
+	it('ignores an empty or unchanged type', async () => {
+		const api = fakeApi();
+		const { session, item } = await parsedItem(api);
+
+		await session.setType(item, '   ');
+		await session.setType(item, 'Положение о подразделении');
+
+		expect(api.setType).not.toHaveBeenCalled();
+	});
+
+	it('waits for parsing to end, since the parser sets the type itself', async () => {
+		const api = fakeApi();
+		const session = new UploadSession(api);
+		session.add('before', [docx()]);
+		await settle();
+
+		await session.setType(session.items[0], 'ВНД');
+
+		expect(api.setType).not.toHaveBeenCalled();
 	});
 
 	it('reverts the type and shows the error when the backend refuses', async () => {
 		const api = fakeApi({
 			setType: vi.fn().mockRejectedValue(new ApiError('Документ не найден', 404))
 		});
-		const { session, item } = await uploaded(api);
+		const { session, item } = await parsedItem(api);
 
-		await session.setType(item, 'order');
+		await session.setType(item, 'ВНД');
 
-		expect(item.document?.doc_type).toBe('unit_regulation');
+		expect(item.document?.document_type).toBe('Положение о подразделении');
 		expect(item.error).toBe('Документ не найден');
 	});
 });
@@ -151,11 +326,11 @@ describe('UploadSession.setType', () => {
 describe('UploadSession.remove', () => {
 	it('deletes the stored document and drops the file', async () => {
 		const api = fakeApi();
-		const { session, item } = await uploaded(api);
+		const { session, item } = await parsedItem(api);
 
 		await session.remove(item);
 
-		expect(api.remove).toHaveBeenCalledWith('id-Положение_ред_9.docx');
+		expect(api.remove).toHaveBeenCalledWith(DOCUMENT_ID);
 		expect(session.items).toEqual([]);
 	});
 
@@ -163,7 +338,7 @@ describe('UploadSession.remove', () => {
 		const api = fakeApi({
 			remove: vi.fn().mockRejectedValue(new ApiError('Документ не найден', 404))
 		});
-		const { session, item } = await uploaded(api);
+		const { session, item } = await parsedItem(api);
 
 		await session.remove(item);
 
@@ -174,7 +349,7 @@ describe('UploadSession.remove', () => {
 		const api = fakeApi({
 			remove: vi.fn().mockRejectedValue(new ApiError('Сервер недоступен', 0))
 		});
-		const { session, item } = await uploaded(api);
+		const { session, item } = await parsedItem(api);
 
 		await session.remove(item);
 
@@ -189,7 +364,7 @@ describe('UploadSession.remove', () => {
 		});
 		const session = new UploadSession(api);
 		session.add('before', [docx()]);
-		await vi.waitFor(() => expect(session.items[0].status).toBe('failed'));
+		await settle();
 
 		await session.remove(session.items[0]);
 

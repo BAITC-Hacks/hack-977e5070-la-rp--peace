@@ -1,10 +1,14 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
+
 	import { documentsApi } from '$lib/api/client';
 	import UploadZone from '$lib/components/UploadZone.svelte';
 	import { DOC_SETS } from '$lib/documents';
 	import { UploadSession } from '$lib/upload/session.svelte';
 
 	const session = new UploadSession(documentsApi);
+	// Leaving the page (e.g. to a document's structure) stops polling the files still being parsed.
+	onDestroy(() => session.dispose());
 	const required = DOC_SETS.filter((info) => !info.optional);
 	const external = DOC_SETS.filter((info) => info.optional);
 	const externalCount = $derived(
