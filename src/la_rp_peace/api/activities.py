@@ -233,5 +233,8 @@ def run_activities(request: Request, session: SessionDep, document_id: int) -> A
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Извлечение недоступно: не заданы OPENAI_API_KEY и OPENAI_MODEL",
         )
+    # Mark the run before queueing it, so a client polling right away never sees the previous outcome.
+    document.activities_status = ActivitiesStatus.RUNNING.value
+    session.commit()
     queue.submit_from(document_id, ActivityStage.name)
-    return ActivityRunOut(document_id=document_id, activities_status=ActivitiesStatus(document.activities_status))
+    return ActivityRunOut(document_id=document_id, activities_status=ActivitiesStatus.RUNNING)
