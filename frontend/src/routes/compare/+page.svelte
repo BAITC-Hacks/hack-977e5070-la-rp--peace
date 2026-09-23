@@ -26,9 +26,21 @@
 </svelte:head>
 
 <div class="grid gap-5">
-	<header class="grid gap-1">
-		<p class="text-xs font-medium tracking-[0.07em] text-muted uppercase">Изменения</p>
-		<h1 class="text-2xl font-semibold">Сравнение текстов «До» и «После»</h1>
+	<header class="flex flex-wrap items-end gap-x-4 gap-y-2">
+		<div class="grid gap-1">
+			<p class="text-xs font-medium tracking-[0.07em] text-muted uppercase">Изменения</p>
+			<h1 class="text-2xl font-semibold">Сравнение текстов «До» и «После»</h1>
+		</div>
+		{#if view.status === 'ready'}
+			<button
+				type="button"
+				data-print="hide"
+				class="ml-auto rounded-md border border-line bg-page px-2.5 py-1 text-[13px] font-medium text-accent hover:border-accent"
+				onclick={() => window.print()}
+			>
+				Скачать PDF
+			</button>
+		{/if}
 	</header>
 
 	{#if view.status === 'missing' || view.status === 'same'}

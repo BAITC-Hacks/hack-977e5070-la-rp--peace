@@ -109,4 +109,16 @@ describe('SummaryPanel', () => {
 
 		await expect.element(screen.getByText('Проверено сотрудником: 2 из 3')).toBeVisible();
 	});
+
+	it('prints the page as PDF and keeps the button off the paper', async () => {
+		const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+		const { screen } = await show();
+
+		const button = screen.getByRole('button', { name: 'Скачать PDF' });
+		await expect.element(button).toHaveAttribute('data-print', 'hide');
+		await button.click();
+
+		expect(print).toHaveBeenCalledOnce();
+		print.mockRestore();
+	});
 });

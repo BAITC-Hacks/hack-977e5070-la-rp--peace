@@ -4,7 +4,7 @@
 	import ThemeToggle from './ThemeToggle.svelte';
 </script>
 
-<header class="sticky top-0 z-10 border-b border-line bg-surface">
+<header data-print="hide" class="sticky top-0 z-10 border-b border-line bg-surface">
 	<div
 		class="mx-auto flex min-h-14 max-w-[1080px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2"
 	>

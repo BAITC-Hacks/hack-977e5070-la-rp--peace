@@ -1,0 +1,88 @@
+/*
+ * Print version: «Скачать PDF» calls window.print() and the browser saves the page as PDF
+ * (.agents/backend.md §5). Mark anything that only makes sense on screen with data-print="hide".
+ */
+@media print {
+	@page {
+		margin: 15mm 12mm;
+	}
+
+	/* White paper and black ink whatever the theme; !important beats both dark-theme selectors. */
+	:root {
+		--page: #ffffff !important;
+		--surface: #ffffff !important;
+		--ink: #000000 !important;
+		--muted: #333333 !important;
+		--line: #9aa19e !important;
+		--accent: #000000 !important;
+		--accent-ink: #ffffff !important;
+		--accent-soft: #ffffff !important;
+		--ok: #1d6b3c !important;
+		--ok-soft: #ffffff !important;
+		--bad: #a1221b !important;
+		--bad-soft: #ffffff !important;
+		--warn: #7a4e00 !important;
+		--warn-soft: #ffffff !important;
+		--neutral: #333333 !important;
+		--neutral-soft: #ffffff !important;
+		--hl: #ffffff !important;
+		/* Finding types (lib/result/colors.css): the light values, which read on white. */
+		--kept: #5b6662 !important;
+		--transformed: #935600 !important;
+		--created: #1d7543 !important;
+		--abolished: #8c3a35 !important;
+		--moved: #17677c !important;
+		--loss: #bf2d27 !important;
+		--duplication: #7443b5 !important;
+		--conflict: #ad4812 !important;
+		--contradiction: #a1306a !important;
+		--overlap: #735f00 !important;
+		color-scheme: light;
+	}
+
+	/* Screen-only controls: the top bar, actions, toggles, tabs and the side panels. */
+	[data-print='hide'],
+	[role='tablist'],
+	button[aria-pressed],
+	label:has(> input[type='checkbox'], > input[type='radio']),
+	dialog {
+		display: none !important;
+	}
+
+	/* Nothing is cut to the viewport: scroll boxes and clamps give the paper their full text. */
+	html,
+	body {
+		height: auto !important;
+	}
+
+	*:not(.sr-only) {
+		max-height: none !important;
+		overflow: visible !important;
+	}
+
+	.sticky,
+	.fixed {
+		position: static !important;
+	}
+
+	/* A page break never splits a card, a list item or a diff row. */
+	[data-row],
+	li,
+	button,
+	.rounded-lg:not(:has([data-row])) {
+		break-inside: avoid;
+	}
+
+	h1,
+	h2,
+	h3 {
+		break-after: avoid;
+	}
+
+	/* A source link (SourceChip) prints with the quoted clause it opens on screen. */
+	button[aria-haspopup='dialog'][title]::after {
+		content: ' ' attr(title);
+		font-family: var(--font-sans);
+		font-style: italic;
+	}
+}
