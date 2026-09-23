@@ -92,7 +92,7 @@
 	</div>
 {:else}
 	<div class="grid gap-4">
-		<ProcessingStatus {rows} ondone={startAnalysis} />
+		<ProcessingStatus {rows} ondone={startAnalysis} doneText="Запускаю анализ…" />
 		{#if comparison !== null && analysisError === null}
 			<div role="status" class="grid gap-2 rounded-lg border border-line bg-surface px-4 py-3">
 				<p>
