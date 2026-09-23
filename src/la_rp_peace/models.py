@@ -407,7 +407,6 @@ class CascadeFinding(Base):
     message: Mapped[str] = mapped_column(Text)
 
 
-
 class Comparison(Base):
     """A stage 5.2 comparison run of a before side and an after side, with its stored report."""
 

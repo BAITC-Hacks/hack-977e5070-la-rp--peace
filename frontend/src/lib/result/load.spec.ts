@@ -5,9 +5,9 @@ import fixture from '$lib/fixtures/result.json';
 
 import { DEMO_ANALYSIS_ID, loadResult } from './load';
 
-function failureOf(id: string): unknown {
+async function failureOf(id: string): Promise<unknown> {
 	try {
-		loadResult(id);
+		await loadResult(id);
 	} catch (caught) {
 		return caught;
 	}
@@ -15,15 +15,16 @@ function failureOf(id: string): unknown {
 }
 
 describe('loadResult', () => {
-	it('gives the demo fixture for the demo analysis', () => {
-		const result = loadResult(DEMO_ANALYSIS_ID);
+	it('gives the demo fixture for the demo analysis', async () => {
+		const result = await loadResult(DEMO_ANALYSIS_ID);
 
 		expect(result).toBe(fixture);
 		expect(result.job_id).toBe(DEMO_ANALYSIS_ID);
 	});
 
-	it.each(['42', 'Demo', ''])('answers 404 «Результат не найден» for «%s»', (id) => {
-		const failure = failureOf(id);
+	// Numeric ids are backend comparisons; anything else is not an analysis at all.
+	it.each(['Demo', ''])('answers 404 «Результат не найден» for «%s»', async (id) => {
+		const failure = await failureOf(id);
 
 		expect(isHttpError(failure, 404)).toBe(true);
 		expect(isHttpError(failure) && failure.body.message).toBe('Результат не найден');

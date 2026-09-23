@@ -7,6 +7,7 @@
 	import DocumentCard from '$lib/components/document/DocumentCard.svelte';
 	import IssueList from '$lib/components/document/IssueList.svelte';
 	import NodeTree from '$lib/components/document/NodeTree.svelte';
+	import DocumentRegistries from '$lib/components/registry/DocumentRegistries.svelte';
 	import SourcePanel from '$lib/components/source/SourcePanel.svelte';
 	import { DOC_SET_LABELS, PARSE_STATUS_LABELS } from '$lib/document/labels';
 	import { TreeState } from '$lib/document/tree-state.svelte';
@@ -140,6 +141,15 @@
 		{:else}
 			{@const details = view.details}
 			<span class="sr-only" role="status">{details ? '' : 'Загрузка документа…'}</span>
+
+			{#if view.document}
+				{#key view.document.id}
+					<DocumentRegistries
+						documentId={view.document.id}
+						onopen={(targets, index) => panel.open(targets, index)}
+					/>
+				{/key}
+			{/if}
 
 			<section
 				class="grid gap-3 rounded-lg border border-line bg-surface p-4"

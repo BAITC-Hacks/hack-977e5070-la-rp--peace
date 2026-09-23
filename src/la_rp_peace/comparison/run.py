@@ -218,7 +218,9 @@ def find_candidates(session: Session, embedder: Embedder, before: Side, after: S
     for i, record in enumerate(before.records):
         order = [int(j) for j in np.argsort(-scores[i])]
         exact = by_text.get(_norm(record.formulation), [])
-        chosen = list(dict.fromkeys([*exact, *(j for j in order[:TOP_CANDIDATES] if scores[i, j] > CANDIDATE_THRESHOLD)]))
+        chosen = list(
+            dict.fromkeys([*exact, *(j for j in order[:TOP_CANDIDATES] if scores[i, j] > CANDIDATE_THRESHOLD)])
+        )
         result.append(
             Candidates(
                 record,
@@ -235,9 +237,15 @@ def _describe(side: Side, record: ActivityRecord, key: str) -> str:
         f"формулировка: {record.formulation}",
         f"участие: {record.participation} ({record.participant_designation})",
     ]
-    parts += [f"{label}: {value}" for label, value in (
-        ("условие", record.condition), ("срок", record.deadline), ("периодичность", record.periodicity),
-    ) if value]
+    parts += [
+        f"{label}: {value}"
+        for label, value in (
+            ("условие", record.condition),
+            ("срок", record.deadline),
+            ("периодичность", record.periodicity),
+        )
+        if value
+    ]
     quotes = "; ".join(f"[node {row.node_id}] «{row.quote}»" for row in side.sources.get(record.id, [])[:2])
     return "\n  ".join(parts) + (f"\n  цитаты: {quotes}" if quotes else "")
 
@@ -287,7 +295,11 @@ def make_check(before: Side, after: Side, items: dict[str, Candidates]) -> Any:
         seen = [m.get("candidate") for m in matches if isinstance(m, dict)]
         if set(seen) != allowed or len(seen) != len(allowed):
             errors.append(f"оцените ровно кандидатов {sorted(allowed)}, получено {seen}")
-        errors += [f"недопустимый verdict {m.get('verdict')!r}" for m in matches if isinstance(m, dict) and m.get("verdict") not in VERDICTS]
+        errors += [
+            f"недопустимый verdict {m.get('verdict')!r}"
+            for m in matches
+            if isinstance(m, dict) and m.get("verdict") not in VERDICTS
+        ]
         if answer.get("coverage") not in COVERAGE:
             errors.append(f"недопустимый coverage {answer.get('coverage')!r}")
         for raw in answer.get("sources") or []:

@@ -39,13 +39,20 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///data/larp.sqlite3"
     max_upload_mb: int = 20
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
     log_level: str = "INFO"
     openai_api_key: SecretStr | None = None
     openai_model: str | None = None
     openai_base_url: str | None = None
     openai_reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = "none"
-    profile_max_chars: int = Field(default=30_000, ge=1_000)
+    # Stage 1 (structure profile) needs some reasoning: with "none" edition 9 ends in needs_review.
+    profile_reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = "low"
+    profile_max_chars: int = Field(default=150_000, ge=1_000)
     profile_retries: int = Field(default=2, ge=0)
     parser_workers: int = Field(default=2, ge=1)
     entity_block_max_chars: int = Field(default=4_000, ge=1_000)
@@ -58,7 +65,7 @@ class Settings(BaseSettings):
     analysis_retries: int = Field(default=2, ge=0)
     analysis_parallel: int = Field(default=32, ge=1)
 
-    @field_validator("openai_reasoning_effort", mode="before")
+    @field_validator("openai_reasoning_effort", "profile_reasoning_effort", mode="before")
     @classmethod
     def _empty_means_unset(cls, value: object) -> object:
         return None if value == "" else value

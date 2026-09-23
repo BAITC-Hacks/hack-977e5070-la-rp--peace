@@ -43,6 +43,12 @@ invented results or build a substitute backend. Report endpoint/contract blocker
 to the relevant owner. This checkpoint demonstrates parsing and traceability;
 it does not claim that organizational comparison is already implemented.
 
+Registered uploads survive a refresh in the same tab: the frontend stores document
+references in `sessionStorage`, scoped to the backend URL, then fetches their current
+status and resumes polling. Files whose upload was not acknowledged must be selected
+again; file contents are not stored in the browser. A Word comparison is unavailable
+when either document has blocking parsing issues; its error links to the documents.
+
 ## Final results flow, when comparison stages are available
 
 The tech task's §7 requires visible results for unit changes, function comparison

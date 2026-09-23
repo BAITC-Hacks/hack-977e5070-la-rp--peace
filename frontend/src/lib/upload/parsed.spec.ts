@@ -6,7 +6,7 @@ import { comparePair, parsedDocuments } from './parsed';
 
 function item(set: DocSet, id: number, parsed = true) {
 	const document = { id } as DocumentOut;
-	return { set, file: new File([], `${set}-${id}.docx`), document, parsed };
+	return { set, name: `${set}-${id}.docx`, document, parsed };
 }
 
 describe('parsedDocuments', () => {

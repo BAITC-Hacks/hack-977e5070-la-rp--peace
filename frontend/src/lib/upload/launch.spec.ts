@@ -69,6 +69,15 @@ describe('launchBlocker', () => {
 		);
 	});
 
+	it('asks to retry the status request for a registered file after reload', () => {
+		const restored = new UploadItem({ name: 'До.docx', size: 7 }, 'before');
+		restored.documentId = 1;
+		restored.status = 'failed';
+		expect(launchBlocker([restored, item('after', 'parsed', 2)])).toBe(
+			'Не удалось получить статус файла «До.docx»: повторите запрос или удалите его.'
+		);
+	});
+
 	it('names a file whose parse has blocking issues', () => {
 		const review = item('after', 'needs_review', 2, {
 			parse_status: 'needs_review',
