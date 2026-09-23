@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from la_rp_peace.enums import DocSet, NodeType, ParseStatus
+from la_rp_peace.enums import DocSet, EntitiesStatus, NodeType, ParseStatus
 
 
 class DocumentOut(BaseModel):
@@ -20,6 +20,7 @@ class DocumentOut(BaseModel):
     content_sha256: str
     uploaded_at: str
     parse_status: ParseStatus
+    entities_status: EntitiesStatus
     title: str | None
     document_type: str | None
     organization: str | None
