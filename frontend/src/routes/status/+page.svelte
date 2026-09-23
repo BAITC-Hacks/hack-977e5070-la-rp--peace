@@ -21,8 +21,9 @@
 
 <svelte:head><title>Обработка документов — Анализ реорганизации</title></svelte:head>
 
-{#if uploadSession.items.length === 0}
-	<!-- The upload list lives in memory: after a reload there is nothing to follow. -->
+{#if uploadSession.restoring}
+	<p class="text-muted" role="status">Восстанавливаем документы…</p>
+{:else if uploadSession.items.length === 0}
 	<div class="grid justify-items-start gap-3">
 		<h1 class="text-2xl font-semibold">Обработка документов</h1>
 		<p class="text-muted">Документы не загружены.</p>

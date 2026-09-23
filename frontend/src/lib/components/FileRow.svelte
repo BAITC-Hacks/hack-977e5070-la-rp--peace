@@ -14,7 +14,7 @@
 
 	const uid = $props.id();
 	const format = $derived(
-		(item.document?.source_format ?? extensionOf(item.file.name).slice(1)).toUpperCase()
+		(item.document?.source_format ?? extensionOf(item.name).slice(1)).toUpperCase()
 	);
 	const badgeClass = $derived(
 		format === 'PDF'
@@ -52,9 +52,9 @@
 			{format}
 		</span>
 		<div class="min-w-0 flex-1">
-			<p class="truncate text-sm font-medium" title={item.file.name}>{item.file.name}</p>
+			<p class="truncate text-sm font-medium" title={item.name}>{item.name}</p>
 			<p class="text-xs text-muted">
-				{formatSize(item.file.size)} ·
+				{formatSize(item.size)} ·
 				<span class={['font-medium', statusClass]}>{item.statusLabel}</span>
 			</p>
 		</div>
@@ -62,7 +62,7 @@
 			type="button"
 			class="rounded p-1 text-muted hover:bg-neutral-soft hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
 			disabled={!item.removable}
-			aria-label={`Удалить ${item.file.name}`}
+			aria-label={`Удалить ${item.name}`}
 			onclick={() => session.remove(item)}
 		>
 			<svg viewBox="0 0 20 20" fill="currentColor" class="size-5" aria-hidden="true">

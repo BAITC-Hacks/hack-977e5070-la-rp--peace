@@ -6,7 +6,8 @@ import { POLL_INTERVAL_MS } from '$lib/document/view.svelte';
  * - `missing`: the address does not name two documents;
  * - `same`: both sides are the same document;
  * - `pending`: a document is still being parsed, checked again every `POLL_INTERVAL_MS`;
- * - `ready`: both cards and both node lists are loaded.
+ * - `ready`: both cards and node lists are loaded, with no blocking parsing issues;
+ * - `failed`: a request failed or parsing has blocking issues.
  */
 export type CompareStatus = 'missing' | 'same' | 'loading' | 'pending' | 'ready' | 'failed';
 
@@ -100,6 +101,19 @@ export class CompareView {
 			if (before.parse_status === 'pending' || after.parse_status === 'pending') {
 				this.status = 'pending';
 				this.#timer = setTimeout(() => void this.#load(), POLL_INTERVAL_MS);
+				return;
+			}
+			const blocked = (
+				[
+					['before', before],
+					['after', after]
+				] as const
+			)
+				.filter(([, document]) => document.blocking_issues > 0)
+				.map(([side]) => SIDE_LABELS[side]);
+			if (blocked.length > 0) {
+				this.status = 'failed';
+				this.error = `Сравнение недоступно: в ${blocked.length > 1 ? 'документах' : 'документе'} ${blocked.join(' и ')} есть блокирующие проблемы разбора. Откройте документ, чтобы посмотреть ошибки.`;
 				return;
 			}
 			this.status = 'loading';

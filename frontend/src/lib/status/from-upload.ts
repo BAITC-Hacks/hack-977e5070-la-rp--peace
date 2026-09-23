@@ -4,7 +4,10 @@ import type { UploadItem } from '$lib/upload/session.svelte';
 import type { DocumentProgress, StageId, StageState } from './stages';
 
 /** What the status screen needs to know about one file of the upload screen. */
-export type UploadProgress = Pick<UploadItem, 'set' | 'file' | 'status' | 'error' | 'document'>;
+export type UploadProgress = Pick<
+	UploadItem,
+	'set' | 'name' | 'status' | 'error' | 'document' | 'documentId'
+>;
 
 type Stages = Record<StageId, StageState>;
 
@@ -20,7 +23,7 @@ function stages(overrides: Partial<Stages>): Stages {
  * «Распознан» and «Разбит на блоки» finish together; blocking parse issues fail the latter.
  */
 export function progressOf(item: UploadProgress): DocumentProgress {
-	const label = `${SET_LABELS[item.set]}: ${item.file.name}`;
+	const label = `${SET_LABELS[item.set]}: ${item.name}`;
 	switch (item.status) {
 		case 'uploading':
 			return { label, stages: stages({ uploaded: 'running' }), error: null };
@@ -28,7 +31,7 @@ export function progressOf(item: UploadProgress): DocumentProgress {
 			return {
 				label,
 				stages:
-					item.document === null
+					item.documentId === null
 						? stages({ uploaded: 'failed' })
 						: stages({ uploaded: 'done', parsed: 'failed' }),
 				error: item.error

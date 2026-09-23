@@ -60,7 +60,27 @@
 			class="flex items-start gap-3 rounded-md border border-bad bg-bad-soft p-3 text-bad"
 			role="alert"
 		>
-			<p class="flex-1">{view.error}</p>
+			<div class="grid flex-1 gap-2">
+				<p>{view.error}</p>
+				<div class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+					{#if view.beforeId !== null}
+						<a
+							href={resolve('/documents/[id]', { id: String(view.beforeId) })}
+							class="underline underline-offset-2"
+						>
+							Открыть документ «До»
+						</a>
+					{/if}
+					{#if view.afterId !== null}
+						<a
+							href={resolve('/documents/[id]', { id: String(view.afterId) })}
+							class="underline underline-offset-2"
+						>
+							Открыть документ «После»
+						</a>
+					{/if}
+				</div>
+			</div>
 			<button
 				type="button"
 				class="shrink-0 rounded border border-bad px-2 py-0.5 text-sm font-medium hover:bg-surface"
