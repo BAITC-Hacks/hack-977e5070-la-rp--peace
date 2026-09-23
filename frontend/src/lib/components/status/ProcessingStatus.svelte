@@ -14,7 +14,7 @@
 		doneText?: string;
 	}
 
-	let { rows, ondone, doneText = 'Запускаю анализ…' }: Props = $props();
+	let { rows, ondone, doneText = 'Открываю структуру документов…' }: Props = $props();
 
 	/** How long «Готово» stays on screen before `ondone`. */
 	const DONE_DELAY_MS = 1200;
