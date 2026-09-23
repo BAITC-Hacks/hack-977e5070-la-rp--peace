@@ -2,9 +2,13 @@
 
 This file provides coding and git guidelines for AI coding agents.
 
-> **Status:** the project has no application code yet, so the toolchain-specific
-> sections below are marked **TBD**. Fill them in as part of the first commit that
-> introduces a stack — do not let code land while they are still placeholders.
+**Stack:** Python, managed with `uv`. Linting and formatting with `ruff` are mandatory.
+
+> **Setup gap:** there is no `pyproject.toml` in this repo yet, so the `uv run ruff ...`
+> commands below cannot execute (`uv run ruff --version` currently fails with
+> `program not found`). The first commit that introduces code must add `pyproject.toml`
+> declaring `ruff` and the ruff rule set in this file. Until then these commands are
+> mandatory in intent but not yet runnable.
 
 ## Mandatory Agent Rules
 
@@ -28,74 +32,115 @@ This file provides coding and git guidelines for AI coding agents.
    one-liners, premature abstractions, or patterns that require extensive mental overhead
    to follow.
 
-## Language-Agnostic Conventions
+## Code Conventions
 
-These hold regardless of the stack.
+**Python:** PEP 8 enforced by `ruff` (line length 120). Use `str | None` not
+`Optional[str]`. Use `list[T]`, `dict[K, V]`. All public functions require complete
+type annotations. `mypy` strict mode — zero errors in CI. Max 50 lines per function,
+max 3 nesting levels. Max McCabe complexity 10 (enforced by `C901`). Google-style
+docstrings on all public classes/functions. Absolute imports only. Import order:
+standard lib → third-party → local.
 
-**Structure:** Keep functions short and shallow — prefer small units over deep nesting.
-Extract a helper before a function outgrows a single screen.
+**Import rules:**
 
-**Imports / dependencies:** All imports at the top of the file, grouped standard library
-→ third-party → local, separated by blank lines. No lazy or function-level imports to
-paper over cycles. A circular dependency is an architecture bug: restructure with
-interfaces, extract the shared piece, or move the dependency to a lower layer.
+- All imports must be at the top of the file, in three groups separated by blank lines:
+  1. Standard library
+  2. Third-party (pandas, fastapi, structlog, etc.)
+  3. Local project packages
+- No function-level imports. No lazy imports. No `# noqa: E402`.
+- Use `if TYPE_CHECKING:` guards only for imports used exclusively in type annotations
+  that would create circular dependencies. Never use `TYPE_CHECKING` guards for imports
+  needed at runtime (e.g., Pydantic model fields, `datetime` in model annotations).
+- Circular dependency = architecture bug. If two modules need each other, restructure
+  with protocols, extract shared interfaces, or move the dependency to a lower layer.
+  Do not work around it with lazy imports.
 
-**Typing:** Public functions carry complete type annotations. Prefer modern built-in
-generic and union syntax over legacy compatibility aliases.
+**Banned imports:**
 
-**Documentation:** Public classes and functions get a docstring or doc comment explaining
-intent, not a restatement of the signature.
+- `from typing import Optional` — use `X | None` instead
+- `import logging` — use `structlog` instead
 
-**Logging:** Use structured logging with bound context, not string interpolation into
-a message. Log events as stable names with fields:
+**Git:** Conventional Commits — `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`. Branch
+naming: `feat/feature-name`, `fix/bug-description`.
 
-    log = get_logger(__name__).bind(entity_id=item.id)
-    log.warning("missing_field", field_name="title")
+**Logging:** Use `structlog` (not stdlib `logging`). Always bind relevant context:
 
-**Error handling:** Never swallow an exception silently. Always log it with context:
+```python
+log = structlog.get_logger(__name__).bind(entity_id=item.id)
+log.warning("missing_field", field_name="title")
+```
 
-    except SomeError as exc:
-        log.warning("operation_failed", error=str(exc))
+**Error handling:** Never use bare `except Exception: pass`. Always log the exception:
 
-**Filesystem:** Prefer the standard library's path abstraction over manual string
-manipulation of paths.
+```python
+except Exception as exc:
+    log.warning("operation_failed", error=str(exc))
+```
 
-## Git
+**Path handling:** Use `pathlib.Path` instead of `os.path`. Use `Path.open()` instead of
+`open()`. Use `Path.exists()` instead of `os.path.exists()`.
 
-**Commits:** Conventional Commits — `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`.
+## Ruff Rule Set
 
-**Branches:** `feat/feature-name`, `fix/bug-description`.
+The following ruff rules are enforced (to be configured in `pyproject.toml`):
 
-**Hygiene:** Stage only relevant files (never `git add -A` blindly). Do not leave
-uncommitted changes after completing a task. This file itself is part of the repo and
-must be committed alongside the work it governs.
+| Rule | Purpose |
+|---|---|
+| `E` | pycodestyle errors |
+| `F` | pyflakes |
+| `I` | isort (import sorting) |
+| `N` | pep8-naming |
+| `UP` | pyupgrade |
+| `B` | flake8-bugbear |
+| `A` | flake8-builtins |
+| `SIM` | flake8-simplify |
+| `S` | flake8-bandit (security) |
+| `C4` | flake8-comprehensions |
+| `PT` | flake8-pytest-style |
+| `RET` | flake8-return |
+| `ARG` | flake8-unused-arguments |
+| `PTH` | flake8-use-pathlib |
+| `ICN` | flake8-import-conventions |
+| `PERF` | perflint |
+| `C901` | McCabe complexity |
+| `RUF` | Ruff-specific rules |
+| `D` | pydocstyle (Google-style docstrings) |
 
-## Stack-Specific Conventions — TBD
+Ignored rules (with justification):
 
-To be filled in when the project's language and toolchain are chosen. Until then, no
-rule in this section may be cited as enforced.
+| Rule | Reason |
+|---|---|
+| `RUF001` | Ambiguous Cyrillic chars — false positives in Russian-language strings |
+| `RUF002` | Ambiguous chars in docstrings — intentional math/typography (× − – →) |
+| `RUF003` | Ambiguous chars in comments — intentional math/typography (× − – →) |
+| `S324` | sha1/md5 hashing — used for cache keys, not security |
+| `TC` | Type-checking import guards — deferred; `strict = true` breaks Pydantic models |
 
-- **Language & runtime version:** TBD
-- **Formatter:** TBD
-- **Linter and enabled rule set:** TBD
-- **Type checker and strictness level:** TBD
-- **Test framework and layout:** TBD
-- **Package / workspace layout:** TBD
-- **Config file holding the above:** TBD
+## Project Layout — TBD
+
+No application code exists yet. Record here, in the commit that introduces it: the
+package layout (single package vs. `uv` workspace members), the target Python version,
+and the location of the test suite. Until that is written down, the mypy invocations in
+step 1 below must be adjusted to match whatever layout actually lands.
 
 ## Validation & Git Workflow
 
 **After every code change, before considering the task done:**
 
-1. **Validate the project is runnable.** Run the project's format check, lint, type check,
-   and test suite — zero errors on each.
+1. **Validate the project is runnable:**
+   ```bash
+   uv run ruff format --check .      # formatting must match
+   uv run ruff check .               # must pass with zero errors
+   uv run mypy .                     # mypy strict — zero errors
+   uv run pytest                     # all tests must pass
+   ```
+   With a `uv` workspace, run `mypy` once per member rather than once at the root.
 
-   > Commands: **TBD.** Record the exact invocations here once the toolchain exists, so
-   > this step is mechanically checkable rather than aspirational.
-
-2. **Format before committing.** Run the project's auto-formatter and safe auto-fixes.
-
-   > Commands: **TBD.**
+2. **Format before committing:**
+   ```bash
+   uv run ruff format .              # auto-format
+   uv run ruff check --fix .         # auto-fix safe violations
+   ```
 
 3. **Commit and push every change:**
    - Stage only relevant files (never `git add -A` blindly)
@@ -104,10 +149,9 @@ rule in this section may be cited as enforced.
    - Do not leave uncommitted changes after completing a task
 
 4. **Review after every change:**
-   - Review the code diff and check that it adheres to the code style and guidelines
-     of this project as described in `.agents/guidelines.md`.
-   - Review relevant project docs and update them to stay accurate given the changes.
+    - Review the code diff and check that it adheres to the code style and guidelines
+      of this project as described in `.agents/guidelines.md`.
+    - Review relevant project docs and update them to stay accurate given the changes.
 
-Steps 3 and 4 are **non-negotiable** and apply today. Step 1 and 2 become non-negotiable
-the moment a toolchain lands — and landing that toolchain includes replacing the TBDs
-above with real commands.
+These steps are **non-negotiable** — a task is not complete until the project passes
+all checks and the commit is pushed.
