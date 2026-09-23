@@ -285,6 +285,8 @@ class EntityStage:
         registry = Registry(SourceVerifier(texts))
         marks = self._read_blocks(card, blocks, registry)
         marks = keep_failed_blocks(registry, previous, marks)
+        while registry.merge_same_identity():
+            pass
         consolidate(self._model, card, registry, places, texts, self._retries)
         report = finish(registry, blocks, marks)
         registry.adopt_previous_ids(previous)

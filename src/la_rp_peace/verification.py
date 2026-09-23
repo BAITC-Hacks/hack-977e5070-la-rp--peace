@@ -132,7 +132,7 @@ def ask_in_batches(
     check: AnswerCheck,
     retries: int,
     batch_size: int = BATCH_SIZE,
-    parallel: int = 6,
+    parallel: int = 32,
 ) -> dict[str, Outcome]:
     """Ask verification questions in batches and collect one outcome per question.
 

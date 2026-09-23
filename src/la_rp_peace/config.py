@@ -44,19 +44,19 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     openai_model: str | None = None
     openai_base_url: str | None = None
-    openai_reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = "low"
-    profile_max_chars: int = Field(default=150_000, ge=1_000)
+    openai_reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = "none"
+    profile_max_chars: int = Field(default=30_000, ge=1_000)
     profile_retries: int = Field(default=2, ge=0)
     parser_workers: int = Field(default=2, ge=1)
-    entity_block_max_chars: int = Field(default=12_000, ge=1_000)
+    entity_block_max_chars: int = Field(default=4_000, ge=1_000)
     entity_retries: int = Field(default=2, ge=0)
-    activity_block_max_chars: int = Field(default=12_000, ge=1_000)
+    activity_block_max_chars: int = Field(default=4_000, ge=1_000)
     activity_retries: int = Field(default=2, ge=0)
-    entity_parallel: int = Field(default=4, ge=1)
-    activity_parallel: int = Field(default=8, ge=1)
+    entity_parallel: int = Field(default=64, ge=1)
+    activity_parallel: int = Field(default=64, ge=1)
     openai_embedding_model: str = "text-embedding-3-large"
     analysis_retries: int = Field(default=2, ge=0)
-    analysis_parallel: int = Field(default=6, ge=1)
+    analysis_parallel: int = Field(default=32, ge=1)
 
     @field_validator("openai_reasoning_effort", mode="before")
     @classmethod

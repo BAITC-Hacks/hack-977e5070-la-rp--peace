@@ -57,7 +57,7 @@ class OpenAIChatModel:
             reasoning_effort: Sent to reasoning models; None omits the parameter.
             timeout_seconds: Per-request timeout.
         """
-        self._client = openai.OpenAI(api_key=api_key, base_url=base_url, timeout=timeout_seconds)
+        self._client = openai.OpenAI(api_key=api_key, base_url=base_url, timeout=timeout_seconds, max_retries=6)
         self._model = model
         self._reasoning_effort = reasoning_effort
 

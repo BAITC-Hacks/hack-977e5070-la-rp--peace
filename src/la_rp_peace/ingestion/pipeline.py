@@ -28,6 +28,9 @@ from la_rp_peace.models import Document, DocumentFile, DocumentNode, ParsingIssu
 
 log = get_logger(__name__)
 
+# Analysis stages that only read the results of earlier stages: run side by side.
+CONCURRENT_STAGES = frozenset({"collisions", "cascade"})
+
 
 def register(session: Session, filename: str, data: bytes, doc_set: DocSet) -> Document:
     """Store an upload as a pending document.
@@ -218,18 +221,28 @@ class ParsingQueue:
         self._run_stages(document_id, 0)
 
     def _run_stages(self, document_id: int, start: int) -> None:
-        for stage in self._stages[start:]:
-            with self._session_factory() as session:
-                if not _has_tree(session, document_id):
-                    log.info("stage_skipped_without_tree", document_id=document_id, stage=stage.name)
-                    return
-                try:
-                    stage.run(session, document_id)
-                except Exception as exc:
-                    log.exception("stage_crashed", document_id=document_id, stage=stage.name, error=str(exc))
-                    session.rollback()
-                    stage.fail(session, document_id, f"Внутренняя ошибка этапа {stage.name}: {exc}")
-                    return
+        stages = self._stages[start:]
+        concurrent = [stage for stage in stages if stage.name in CONCURRENT_STAGES]
+        for stage in [stage for stage in stages if stage.name not in CONCURRENT_STAGES]:
+            if not self._run_stage(stage, document_id):
+                return
+        with ThreadPoolExecutor(max_workers=max(1, len(concurrent)), thread_name_prefix="analysis") as pool:
+            list(pool.map(lambda stage: self._run_stage(stage, document_id), concurrent))
+
+    def _run_stage(self, stage: PostParseStage, document_id: int) -> bool:
+        """Run one stage in its own session; False stops the chain."""
+        with self._session_factory() as session:
+            if not _has_tree(session, document_id):
+                log.info("stage_skipped_without_tree", document_id=document_id, stage=stage.name)
+                return False
+            try:
+                stage.run(session, document_id)
+            except Exception as exc:
+                log.exception("stage_crashed", document_id=document_id, stage=stage.name, error=str(exc))
+                session.rollback()
+                stage.fail(session, document_id, f"Внутренняя ошибка этапа {stage.name}: {exc}")
+                return False
+        return True
 
     def requeue_pending(self) -> int:
         """Queue documents left pending by a previous run; return how many."""

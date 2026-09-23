@@ -52,7 +52,7 @@ class OpenAIEmbedder:
             base_url: Alternative OpenAI-compatible endpoint, if any.
             timeout_seconds: Per-request timeout.
         """
-        self._client = openai.OpenAI(api_key=api_key, base_url=base_url, timeout=timeout_seconds)
+        self._client = openai.OpenAI(api_key=api_key, base_url=base_url, timeout=timeout_seconds, max_retries=6)
         self.model = model
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:

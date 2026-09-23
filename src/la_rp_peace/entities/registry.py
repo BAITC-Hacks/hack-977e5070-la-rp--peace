@@ -348,6 +348,28 @@ class Registry:
         parent = ParentIn(ref=target, status=update.status, candidates=update.candidates, sources=update.sources)
         self._set_parent(entity.key, parent, {})
 
+    def merge_same_identity(self) -> int:
+        """Merge entities with the same normalised name, category and parent; return how many.
+
+        Blocks read in parallel each create their own copy of objects they all mention; this
+        folds those copies together. Same name alone is never enough: «Аудитор» of ДИТААД and
+        «Аудитор» of ДОА have different parents and stay apart.
+        """
+        seen: dict[tuple[str, str, str | None], str] = {}
+        merged = 0
+        for key in list(self.entities):
+            entity = self.entities.get(key)
+            if entity is None:
+                continue
+            identity = (" ".join(entity.name.split()).casefold(), str(entity.category), entity.parent)
+            keep = seen.get(identity)
+            if keep is None or keep not in self.entities:
+                seen[identity] = key
+                continue
+            self._merge(keep, key, [])
+            merged += 1
+        return merged
+
     def _merge(self, keep: str, merge: str, sources: list[Evidence]) -> None:
         kept, gone = self.entities[keep], self.entities.pop(merge)
         self._merged[merge] = keep
