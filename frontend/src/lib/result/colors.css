@@ -1,0 +1,46 @@
+/*
+ * Colour of each finding type (lib/result/types.ts FindingType), used through var(--<type>).
+ * Dark values are from docs/spec/visual_compare.html; `abolished` and `contradiction` are not in
+ * the mockup and were chosen to match. Light values keep ≥ 4.5:1 against --surface and --page.
+ * Theme switching follows src/routes/layout.css.
+ */
+:root {
+	--kept: #5b6662;
+	--transformed: #935600;
+	--created: #1d7543;
+	--abolished: #8c3a35;
+	--moved: #17677c;
+	--loss: #bf2d27;
+	--duplication: #7443b5;
+	--conflict: #ad4812;
+	--contradiction: #a1306a;
+	--overlap: #735f00;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--kept: #8a9499;
+		--transformed: #e0a44a;
+		--created: #5cc27f;
+		--abolished: #d98b86;
+		--moved: #6fb7c9;
+		--loss: #e05a5a;
+		--duplication: #b48ae6;
+		--conflict: #ef7a4f;
+		--contradiction: #e28bbd;
+		--overlap: #d9c35a;
+	}
+}
+
+:root[data-theme='dark'] {
+	--kept: #8a9499;
+	--transformed: #e0a44a;
+	--created: #5cc27f;
+	--abolished: #d98b86;
+	--moved: #6fb7c9;
+	--loss: #e05a5a;
+	--duplication: #b48ae6;
+	--conflict: #ef7a4f;
+	--contradiction: #e28bbd;
+	--overlap: #d9c35a;
+}
