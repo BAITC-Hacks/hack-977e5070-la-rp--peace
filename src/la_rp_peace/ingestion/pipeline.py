@@ -11,7 +11,7 @@ build on its results.
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Protocol
 
@@ -188,6 +188,10 @@ class ParsingQueue:
     def submit(self, document_id: int) -> Future[None]:
         """Queue a document for the whole pipeline."""
         return self._executor.submit(self._run, document_id)
+
+    def submit_call(self, call: "Callable[[], None]") -> Future[None]:
+        """Run any background job (e.g. a comparison) on the pipeline's workers."""
+        return self._executor.submit(call)
 
     def submit_from(self, document_id: int, stage_name: str) -> Future[None]:
         """Queue a re-run of the pipeline from a post-parse stage onwards.

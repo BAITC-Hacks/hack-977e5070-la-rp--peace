@@ -623,4 +623,18 @@ CREATE TABLE cascade_findings (
         FOREIGN KEY (document_id, link_id) REFERENCES cascade_links (document_id, id) ON DELETE CASCADE
 ) STRICT;
 
+-- Stage 5.2: semantic before -> after comparison of one or more documents per side. The stored
+-- report keeps entity_id / record_id lists of both sides; source registries are never changed.
+CREATE TABLE comparisons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    before_ids TEXT NOT NULL CHECK (json_valid(before_ids) AND json_type(before_ids) = 'array'),
+    after_ids TEXT NOT NULL CHECK (json_valid(after_ids) AND json_type(after_ids) = 'array'),
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'running', 'done', 'needs_review', 'failed')),
+    params TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(params)),
+    result TEXT CHECK (result IS NULL OR json_valid(result)),
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+) STRICT;
+
 COMMIT;

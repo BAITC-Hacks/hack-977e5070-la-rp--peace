@@ -407,6 +407,22 @@ class CascadeFinding(Base):
     message: Mapped[str] = mapped_column(Text)
 
 
+
+class Comparison(Base):
+    """A stage 5.2 comparison run of a before side and an after side, with its stored report."""
+
+    __tablename__ = "comparisons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    before_ids: Mapped[str] = mapped_column(Text)
+    after_ids: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, default="pending")
+    params: Mapped[str] = mapped_column(Text, default="{}")
+    result: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
+
+
 def create_schema(engine: Engine) -> None:
     """Create all tables on a new database.
 

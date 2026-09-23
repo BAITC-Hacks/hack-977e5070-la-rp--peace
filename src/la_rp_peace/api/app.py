@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import sessionmaker
 
 from la_rp_peace.activities.pipeline import ActivityStage
-from la_rp_peace.api import activities, cascade, collisions, documents, entities, sources
+from la_rp_peace.api import activities, cascade, collisions, comparisons, documents, entities, sources
 from la_rp_peace.cascade.pipeline import CascadeStage
 from la_rp_peace.collisions.pipeline import CollisionStage
 from la_rp_peace.config import Settings, get_settings
@@ -108,6 +108,8 @@ def create_app(settings: Settings | None = None, model: ChatModel | None = None)
     app.state.settings = settings
     app.state.session_factory = session_factory
     app.state.parsing_queue = queue
+    app.state.chat_model = model
+    app.state.embedder = _default_embedder(settings) if model is not None else None
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -120,6 +122,7 @@ def create_app(settings: Settings | None = None, model: ChatModel | None = None)
     app.include_router(activities.router)
     app.include_router(collisions.router)
     app.include_router(cascade.router)
+    app.include_router(comparisons.router)
 
     @app.get("/api/health", tags=["meta"])
     def health() -> dict[str, str]:
