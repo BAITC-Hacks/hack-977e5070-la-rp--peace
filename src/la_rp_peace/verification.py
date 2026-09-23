@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
+from la_rp_peace.config import get_settings
 from la_rp_peace.llm import ChatModel, ChatModelError, Message
 from la_rp_peace.logging_config import get_logger
 
@@ -132,7 +133,7 @@ def ask_in_batches(
     check: AnswerCheck,
     retries: int,
     batch_size: int = BATCH_SIZE,
-    parallel: int = 32,
+    parallel: int | None = None,
 ) -> dict[str, Outcome]:
     """Ask verification questions in batches and collect one outcome per question.
 
@@ -143,7 +144,7 @@ def ask_in_batches(
         check: Validates one answer object for its question; returns problems (empty = valid).
         retries: Corrected replies to request per batch after the first.
         batch_size: Questions per request (10 by the methodology).
-        parallel: Batches asked at once; batches are independent.
+        parallel: Batches asked at once; defaults to ANALYSIS_PARALLEL from settings.
 
     Returns:
         Outcome by question id, for every question.
@@ -155,7 +156,8 @@ def ask_in_batches(
     if len(ids) != len(set(ids)):
         raise ValueError("question_id must be unique")
     batches = [_Batch(questions[start : start + batch_size], check) for start in range(0, len(questions), batch_size)]
-    with ThreadPoolExecutor(max_workers=max(1, parallel), thread_name_prefix="verification") as pool:
+    workers = get_settings().analysis_parallel if parallel is None else parallel
+    with ThreadPoolExecutor(max_workers=max(1, workers), thread_name_prefix="verification") as pool:
         list(pool.map(lambda batch: _ask_batch(model, system_prompt, batch, retries), batches))
     outcomes: dict[str, Outcome] = {}
     for batch in batches:
