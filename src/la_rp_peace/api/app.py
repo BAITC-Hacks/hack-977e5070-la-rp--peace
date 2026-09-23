@@ -26,7 +26,12 @@ def _default_profiler(settings: Settings) -> Profiler | None:
     if not api_key or not settings.openai_model:
         log.warning("profiler_not_configured", hint="set OPENAI_API_KEY and OPENAI_MODEL")
         return None
-    return OpenAIProfiler(api_key, settings.openai_model, base_url=settings.openai_base_url or None)
+    return OpenAIProfiler(
+        api_key,
+        settings.openai_model,
+        base_url=settings.openai_base_url or None,
+        reasoning_effort=settings.openai_reasoning_effort,
+    )
 
 
 def create_app(settings: Settings | None = None, profiler: Profiler | None = None) -> FastAPI:

@@ -4,6 +4,11 @@ One attempt = model answer → metadata schema → profile compilation and self-
 built on the whole document → tree checks → metadata quotes verified. Problems are sent back
 to the model (methodology §2: targeted refinement) until the answer passes or the retry
 budget is spent; the best attempt is kept and its remaining problems become issues.
+
+Numbering gaps are advisories: usually a clause glued into the previous paragraph that the
+profile did not split (e.g. «…мероприятий. 10.Контроль качества»), but documents may skip
+numbers for real. They are sent back once; if the next answer shows the same gaps, they are
+accepted as genuine instead of spending the remaining retries.
 """
 
 import json
@@ -24,12 +29,19 @@ from la_rp_peace.logging_config import get_logger
 
 log = get_logger(__name__)
 
+_GAP_ADVICE = (
+    " — возможно, пункт склеен с предыдущим текстом и не распознан (проверьте inline-шаблоны"
+    " и одноуровневые номера вроде «10.Текст»); если в документе номер действительно пропущен,"
+    " оставьте профиль как есть"
+)
+
 
 @dataclass(slots=True)
 class Attempt:
     """Everything produced from one model answer."""
 
     errors: list[str] = field(default_factory=list)
+    advisories: list[str] = field(default_factory=list)
     profile: dict[str, Any] | None = None
     nodes: list[ParsedNode] = field(default_factory=list)
     tree_issues: list[IssueDraft] = field(default_factory=list)
@@ -75,6 +87,9 @@ def _tree(compiled: CompiledProfile, attempt: Attempt, extraction: Extraction) -
         return
     attempt.tree_issues = check_tree(extraction, attempt.nodes, compiled.profile.strategy)
     attempt.errors += [issue.message for issue in attempt.tree_issues if issue.is_blocking]
+    attempt.advisories = [
+        issue.message + _GAP_ADVICE for issue in attempt.tree_issues if issue.issue_type is IssueType.NUMBERING_GAP
+    ]
 
 
 def evaluate(content: str, extraction: Extraction) -> Attempt:
@@ -113,6 +128,17 @@ def _result(attempt: Attempt, attempts: int, studied: list[tuple[int, int]]) -> 
     return AnalysisResult(profile, attempt.nodes, issues, attempt.metadata, status)
 
 
+def _rank(attempt: Attempt) -> tuple[bool, int, int]:
+    """Prefer an answer that produced a tree, then fewer errors, then fewer advisories."""
+    return bool(attempt.nodes), -len(attempt.errors), -len(attempt.advisories)
+
+
+def _accepted(attempt: Attempt, previous: Attempt | None) -> bool:
+    if attempt.errors:
+        return False
+    return not attempt.advisories or (previous is not None and attempt.advisories == previous.advisories)
+
+
 def analyse(extraction: Extraction, profiler: Profiler, max_chars: int, retries: int) -> AnalysisResult:
     """Profile, parse and verify one document.
 
@@ -131,16 +157,17 @@ def analyse(extraction: Extraction, profiler: Profiler, max_chars: int, retries:
     view = document_view(extraction, max_chars)
     messages: list[Message] = initial_messages(view)
     best: Attempt | None = None
+    previous: Attempt | None = None
     for number in range(1, retries + 2):
         content = profiler.complete(messages)
         attempt = evaluate(content, extraction)
-        log.info("profile_attempt", attempt=number, errors=len(attempt.errors))
-        # Prefer an answer that produced a tree, then the one with fewer problems.
-        if best is None or (bool(attempt.nodes), -len(attempt.errors)) >= (bool(best.nodes), -len(best.errors)):
+        log.info("profile_attempt", attempt=number, errors=len(attempt.errors), advisories=len(attempt.advisories))
+        if best is None or _rank(attempt) >= _rank(best):
             best = attempt
-        if not attempt.errors:
+        if _accepted(attempt, previous):
             return _result(attempt, number, view.studied_ranges)
-        messages += [Message("assistant", content), feedback_message(attempt.errors)]
+        messages += [Message("assistant", content), feedback_message(attempt.errors + attempt.advisories)]
+        previous = attempt
     if best is None:
         raise ValueError("retries must not be negative")
     return _result(best, retries + 1, view.studied_ranges)

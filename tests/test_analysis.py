@@ -5,9 +5,10 @@ from typing import Any
 import pytest
 from conftest import RecordedProfiler, edition_path, recorded_answer
 
-from la_rp_peace.enums import IssueType, ParseStatus
+from la_rp_peace.enums import DocFormat, IssueType, ParseStatus
 from la_rp_peace.ingestion.analysis import analyse
 from la_rp_peace.ingestion.extract import detect_format, extract
+from la_rp_peace.ingestion.extract.types import Extraction, TextBuilder
 from la_rp_peace.ingestion.profiler import ProfilerError
 from la_rp_peace.ingestion.prompt import Message
 
@@ -85,3 +86,48 @@ def test_large_documents_are_sampled_with_gaps_marked() -> None:
     assert result.profile is not None
     assert len(result.profile["studied_ranges"]) > 1
     assert result.status is ParseStatus.VALIDATED
+
+
+ED8 = edition_path(8)
+ED8_EXTRACTION = extract(detect_format(ED8.name, ED8.read_bytes()), ED8.read_bytes())
+
+
+def test_numbering_gaps_are_sent_back_and_fixed() -> None:
+    without_inline = copy.deepcopy(recorded_answer(8))
+    without_inline["parsing_profile"]["patterns"] = [
+        pattern for pattern in without_inline["parsing_profile"]["patterns"] if pattern["apply_to"] != "inline"
+    ]
+    profiler = RecordedProfiler(
+        [json.dumps(answer, ensure_ascii=False) for answer in (without_inline, recorded_answer(8))]
+    )
+
+    result = analyse(ED8_EXTRACTION, profiler, max_chars=150_000, retries=2)
+
+    assert len(profiler.conversations) == 2
+    feedback = profiler.conversations[1][-1].content
+    assert "После 9.60 идёт 10.1" in feedback
+    assert "склеен" in feedback
+    assert [node.marker for node in result.nodes if node.node_type.value == "section"][9] == "10"
+
+
+def _synthetic_answer() -> str:
+    answer = copy.deepcopy(recorded_answer(9))
+    for name, value in answer["metadata"].items():
+        if name != "extra":
+            value.update(status="not_found", value=None, quotes=[])
+    answer["metadata"]["extra"] = []
+    return json.dumps(answer, ensure_ascii=False)
+
+
+def test_genuine_gap_is_accepted_after_one_confirmation() -> None:
+    builder = TextBuilder()
+    for index, text in enumerate(["1. Общие положения", "1.1. Первый.", "1.3. Третий."]):
+        builder.add(text, {"paragraph": index})
+    extraction = Extraction(DocFormat.DOCX, builder.text(), builder.blocks, builder.source_map)
+    profiler = RecordedProfiler([_synthetic_answer()] * 3)
+
+    result = analyse(extraction, profiler, max_chars=150_000, retries=2)
+
+    assert len(profiler.conversations) == 2
+    assert result.status is ParseStatus.VALIDATED
+    assert [issue.issue_type for issue in result.issues] == [IssueType.NUMBERING_GAP]

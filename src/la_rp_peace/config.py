@@ -1,8 +1,9 @@
 """Application settings loaded from the environment and an optional .env file."""
 
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +18,8 @@ class Settings(BaseSettings):
         openai_api_key: Key for the profiling model; parsing is unavailable without it.
         openai_model: Model name for the profiling call; required together with the key.
         openai_base_url: Alternative OpenAI-compatible endpoint, if any.
+        openai_reasoning_effort: Reasoning effort for reasoning models; empty to omit the
+            parameter for models that do not accept it.
         profile_max_chars: Documents rendered longer than this are sampled for the model.
         profile_retries: Corrected answers requested after the first one.
         parser_workers: Documents parsed in parallel.
@@ -31,9 +34,15 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     openai_model: str | None = None
     openai_base_url: str | None = None
+    openai_reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = "low"
     profile_max_chars: int = Field(default=150_000, ge=1_000)
     profile_retries: int = Field(default=2, ge=0)
     parser_workers: int = Field(default=2, ge=1)
+
+    @field_validator("openai_reasoning_effort", mode="before")
+    @classmethod
+    def _empty_means_unset(cls, value: object) -> object:
+        return None if value == "" else value
 
     @property
     def max_upload_bytes(self) -> int:

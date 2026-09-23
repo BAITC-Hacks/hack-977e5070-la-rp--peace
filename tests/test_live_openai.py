@@ -21,6 +21,7 @@ def profiler() -> OpenAIProfiler:
         settings.openai_api_key.get_secret_value(),
         settings.openai_model,
         base_url=settings.openai_base_url or None,
+        reasoning_effort=settings.openai_reasoning_effort,
     )
 
 

@@ -25,7 +25,7 @@ uv run uvicorn la_rp_peace.api.app:create_app --factory --reload   # http://loca
 ```
 
 Config (env or `.env`, see `.env.example`): `DATABASE_URL`, `MAX_UPLOAD_MB`, `CORS_ORIGINS`,
-`LOG_LEVEL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`, `PROFILE_MAX_CHARS`,
+`LOG_LEVEL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`, `OPENAI_REASONING_EFFORT` (default `low`), `PROFILE_MAX_CHARS`,
 `PROFILE_RETRIES`, `PARSER_WORKERS`. Without the key and model, uploads return 503.
 
 ## Layout
@@ -61,7 +61,8 @@ src/la_rp_peace/
    `{metadata, parsing_profile}`. The profile is validated (schema, regex compilation with
    timeout, its own positive/negative examples), applied to the whole document, and the tree
    checked; metadata quotes are located in `original_text`. Every problem goes back to the
-   model; after `PROFILE_RETRIES` the best answer is kept.
+   model (numbering gaps as advisories: accepted if the next answer confirms them); after
+   `PROFILE_RETRIES` the best answer is kept.
 4. One transaction writes text, source map, card + evidence, profile (with `studied_ranges`,
    `attempts`), nodes and issues. Status: `validated` without open blocking issues, otherwise
    `needs_review`. Extraction or model failures -> `needs_review` + blocking issue.

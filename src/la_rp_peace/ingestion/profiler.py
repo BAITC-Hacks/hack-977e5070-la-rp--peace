@@ -1,11 +1,13 @@
 """The language-model call that proposes a document's metadata and parsing profile."""
 
-from typing import Protocol
+from typing import Literal, Protocol
 
 import openai
 from openai.types.chat import ChatCompletionMessageParam
 
 from la_rp_peace.ingestion.prompt import Message
+
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
 
 
 class ProfilerError(RuntimeError):
@@ -31,17 +33,26 @@ def _to_openai(message: Message) -> ChatCompletionMessageParam:
 class OpenAIProfiler:
     """Profiler backed by the OpenAI Chat Completions API in JSON mode."""
 
-    def __init__(self, api_key: str, model: str, base_url: str | None = None, timeout_seconds: float = 180) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        base_url: str | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
+        timeout_seconds: float = 180,
+    ) -> None:
         """Create the client.
 
         Args:
             api_key: OpenAI API key.
             model: Model name, e.g. from ``OPENAI_MODEL``.
             base_url: Alternative OpenAI-compatible endpoint, if any.
+            reasoning_effort: Sent to reasoning models; None omits the parameter.
             timeout_seconds: Per-request timeout.
         """
         self._client = openai.OpenAI(api_key=api_key, base_url=base_url, timeout=timeout_seconds)
         self._model = model
+        self._reasoning_effort = reasoning_effort
 
     def complete(self, messages: list[Message]) -> str:
         """Send the conversation and return the JSON text of the reply.
@@ -54,6 +65,7 @@ class OpenAIProfiler:
                 model=self._model,
                 messages=[_to_openai(message) for message in messages],
                 response_format={"type": "json_object"},
+                reasoning_effort=self._reasoning_effort if self._reasoning_effort is not None else openai.omit,
             )
         except openai.OpenAIError as exc:
             raise ProfilerError(f"Ошибка обращения к модели: {exc}") from exc
