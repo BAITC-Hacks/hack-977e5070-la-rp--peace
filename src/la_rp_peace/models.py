@@ -52,6 +52,8 @@ class Document(Base):
     uploaded_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
     doc_set: Mapped[str | None] = mapped_column(Text)
     entities_status: Mapped[str] = mapped_column(Text, default="not_started")
+    collisions_status: Mapped[str] = mapped_column(Text, default="not_started")
+    cascade_status: Mapped[str] = mapped_column(Text, default="not_started")
     activities_status: Mapped[str] = mapped_column(Text, default="not_started")
 
 
@@ -184,6 +186,7 @@ class ActivityRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
     block_node_id: Mapped[int] = mapped_column(Integer)
+    provision_key: Mapped[str] = mapped_column(Text)
     entity_id: Mapped[int | None] = mapped_column(Integer)
     designation: Mapped[str] = mapped_column(Text)
     record_type: Mapped[str] = mapped_column(Text)
@@ -240,6 +243,25 @@ class ActivityIssue(Base):
     is_blocking: Mapped[int] = mapped_column(Integer, default=0)
     resolved_at: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
+
+
+class EmbeddingCache(Base):
+    """A cached embedding vector of one exact text under one model and text format."""
+
+    __tablename__ = "embedding_cache"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model: Mapped[str] = mapped_column(Text)
+    text_format: Mapped[str] = mapped_column(Text)
+    text_sha256: Mapped[str] = mapped_column(Text)
+    dimensions: Mapped[int] = mapped_column(Integer)
+    vector: Mapped[bytes] = mapped_column(LargeBinary)
+
+
+# Stage 4.1 models (function collisions) go below this line.
+
+
+# Stage 4.2 models (function cascade) go below this line.
 
 
 def create_schema(engine: Engine) -> None:

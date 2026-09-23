@@ -9,6 +9,7 @@ records stores the verified records of its best failed attempt. Records of block
 longer planned are deleted. Block marks and block-level issues always describe the latest run.
 """
 
+import hashlib
 import json
 from collections.abc import Sequence
 
@@ -56,7 +57,26 @@ def _add_issues(session: Session, document_id: int, issues: Sequence[IssueDraft]
     )
 
 
+def provision_key(block_node_id: int, record: CheckedRecord) -> str:
+    """Id shared by the records split from one provision, stable across re-runs of the block.
+
+    Records of one provision differ only in their participant; everything hashed here is the
+    provision's own wording, so every participant's record gets the same key.
+    """
+    basis = "\x1f".join(
+        [
+            str(block_node_id),
+            record.record_type.value,
+            " ".join(record.formulation.split()).casefold(),
+            record.participation.value,
+            " ".join(record.participant_designation.split()).casefold(),
+        ],
+    )
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:16]
+
+
 def _fill(row: ActivityRecord, record: CheckedRecord) -> None:
+    row.provision_key = provision_key(row.block_node_id, record)
     row.entity_id = record.entity_id
     row.designation = record.designation
     row.record_type = record.record_type.value

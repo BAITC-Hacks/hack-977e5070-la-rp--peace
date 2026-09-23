@@ -23,9 +23,9 @@ def _insert(connection: Connection, sql: str, **values: Any) -> int:
 
 
 RECORD = (
-    "INSERT INTO activity_records (document_id, block_node_id, entity_id, designation, record_type, formulation, "
-    "specificity, participation, participant_designation, note) "
-    "VALUES (:d, :n, :e, 'Отдел', 'function', 'Отдел проверяет', 'specific', :p, 'Отдел', :note)"
+    "INSERT INTO activity_records (document_id, block_node_id, provision_key, entity_id, designation, record_type, "
+    "formulation, specificity, participation, participant_designation, note) "
+    "VALUES (:d, :n, '0123456789abcdef', :e, 'Отдел', 'function', 'Отдел проверяет', 'specific', :p, 'Отдел', :note)"
 )
 SOURCE = (
     "INSERT INTO activity_sources (document_id, record_id, node_id, quote, quote_start, quote_end, supports) "

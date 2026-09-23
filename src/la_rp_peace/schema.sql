@@ -77,6 +77,13 @@ CREATE TABLE documents (
     entities_status TEXT NOT NULL DEFAULT 'not_started' CHECK (entities_status IN (
         'not_started', 'running', 'done', 'needs_review', 'failed'
     )),
+    -- Backend: progress of stage 4.1 (function collisions) and 4.2 (function cascade).
+    collisions_status TEXT NOT NULL DEFAULT 'not_started' CHECK (collisions_status IN (
+        'not_started', 'running', 'done', 'needs_review', 'failed'
+    )),
+    cascade_status TEXT NOT NULL DEFAULT 'not_started' CHECK (cascade_status IN (
+        'not_started', 'running', 'done', 'needs_review', 'failed'
+    )),
     activities_status TEXT NOT NULL DEFAULT 'not_started' CHECK (activities_status IN ('not_started', 'running', 'done', 'needs_review', 'failed')),
     CONSTRAINT documents_parsed_requires_text
         CHECK (parse_status NOT IN ('parsed', 'validated') OR original_text IS NOT NULL)
@@ -276,6 +283,8 @@ CREATE TABLE activity_records (
     document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
     -- The planned block whose answer produced the record; a re-run of the block replaces its records.
     block_node_id INTEGER NOT NULL,
+    -- Shared by the records split from one provision (one per participant); stable across re-runs.
+    provision_key TEXT NOT NULL CHECK (length(provision_key) = 16),
     -- NULL = unresolved role or undisclosed remainder of a group; note explains what to clarify.
     entity_id INTEGER,
     -- How the text names this participant, e.g. «уполномоченный им работник».
@@ -355,5 +364,21 @@ CREATE TABLE activity_issues (
     CONSTRAINT activity_issues_record_same_document
         FOREIGN KEY (document_id, record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE
 ) STRICT;
+
+-- Stage 4 shared: cached embedding vectors of analysis texts, keyed by model, text format and the
+-- SHA-256 of the exact embedded text (vectors are float64 little-endian bytes).
+CREATE TABLE embedding_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model TEXT NOT NULL CHECK (trim(model) <> ''),
+    text_format TEXT NOT NULL CHECK (trim(text_format) <> ''),
+    text_sha256 TEXT NOT NULL CHECK (length(text_sha256) = 64),
+    dimensions INTEGER NOT NULL CHECK (dimensions > 0),
+    vector BLOB NOT NULL,
+    CONSTRAINT embedding_cache_identity UNIQUE (model, text_format, text_sha256)
+) STRICT;
+
+-- Stage 4.1 tables (function collisions) go below this line.
+
+-- Stage 4.2 tables (function cascade) go below this line.
 
 COMMIT;

@@ -28,6 +28,8 @@ class Settings(BaseSettings):
         entity_retries: Corrected stage 2 answers requested after the first, per call.
         activity_block_max_chars: Size limit of one stage 3 block shown to the model.
         activity_retries: Corrected stage 3 answers requested per block after the first.
+        openai_embedding_model: Embedding model of stages 4.1/4.2; their thresholds assume it.
+        analysis_retries: Corrected answers requested per verification batch after the first.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -47,6 +49,8 @@ class Settings(BaseSettings):
     entity_retries: int = Field(default=2, ge=0)
     activity_block_max_chars: int = Field(default=12_000, ge=1_000)
     activity_retries: int = Field(default=2, ge=0)
+    openai_embedding_model: str = "text-embedding-3-large"
+    analysis_retries: int = Field(default=2, ge=0)
 
     @field_validator("openai_reasoning_effort", mode="before")
     @classmethod

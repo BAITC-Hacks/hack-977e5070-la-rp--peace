@@ -9,6 +9,7 @@ from activity_script import participant, provision, source
 from la_rp_peace.activities.answers import BlockAnswer
 from la_rp_peace.activities.checks import document_status, review_status
 from la_rp_peace.activities.extract import extract_block
+from la_rp_peace.activities.store import provision_key
 from la_rp_peace.activities.verify import BlockScope, RegistryEntry, check_answer
 from la_rp_peace.entities.blocks import Block, BlockLine
 from la_rp_peace.entities.verify import SourceVerifier
@@ -143,6 +144,9 @@ def test_joint_provision_becomes_one_record_per_specialist() -> None:
     assert first.formulation == second.formulation
     assert first.sources[0] == second.sources[0]
     assert first.sources[0].quote == "Специалисты А и Б совместно готовят отчёт"
+    # Stages 4.1/4.2 consolidate joint functions by the provision the records were split from.
+    assert provision_key(7, first) == provision_key(7, second)
+    assert provision_key(7, first) != provision_key(8, first)
 
 
 def test_participant_condition_joins_the_provision_condition() -> None:

@@ -179,3 +179,19 @@ class ActivityIssueType(StrEnum):
     UNCLEAR = "unclear"
     BLOCK_FAILED = "block_failed"
     OTHER = "other"
+
+
+class AnalysisStatus(StrEnum):
+    """Progress of an analysis stage (4.1 collisions, 4.2 cascade) for a document."""
+
+    NOT_STARTED = "not_started"
+    RUNNING = "running"
+    DONE = "done"
+    NEEDS_REVIEW = "needs_review"
+    FAILED = "failed"
+
+
+# Stage 4.1 enums (function collisions) go below this line.
+
+
+# Stage 4.2 enums (function cascade) go below this line.
