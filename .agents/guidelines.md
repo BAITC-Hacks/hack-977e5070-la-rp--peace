@@ -125,7 +125,7 @@ src/la_rp_peace/          importable package (name derives from project.name)
   logging_config.py       configure_logging() / get_logger()
   config.py, db.py        settings, engine
   models.py, enums.py     ORM models, shared enums
-  ingestion/              .docx/.pdf/.xlsx → clause tree with citation anchors
+  ingestion/              extraction, AI parsing profile, node tree, checks (methodology stage 1)
   api/                    FastAPI app factory and routers
   analysis/               methodology stages (Marinadec)
 tests/                    pytest suite, testpaths in pyproject.toml

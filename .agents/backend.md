@@ -11,12 +11,12 @@ the frontend: [`frontend.md`](frontend.md) §4.
 | Concern | Choice | Why |
 |---|---|---|
 | API | FastAPI + uvicorn, sync endpoints | Typed, OpenAPI at `/docs` for Sula for free |
-| DB | SQLite file `data/larp.sqlite3`, SQLAlchemy 2 sync ORM; foreign keys + WAL set on every connection | No server to run; the methodology schema targets SQLite |
-| Schema | Created on startup — **no migrations** | Six hours. Schema change → delete `data/larp.sqlite3` |
-| Files | Original bytes stored in the database | One file to copy or reset; files are ~100 KB |
-| Parsing | python-docx, pymupdf, openpyxl | .docx / .pdf / .xlsx from the task (§5) |
-| Jobs | In-process `ThreadPoolExecutor(max_workers=1)` — no Celery/Redis | One demo user; one moving part less |
-| Tests | pytest on in-memory SQLite | Same engine as production |
+| DB | SQLite file `data/larp.sqlite3`, SQLAlchemy 2 sync ORM; foreign keys + WAL on every connection | No server; the methodology schema targets SQLite |
+| Schema | **`methodology/01_document_parsing.sql` executed verbatim** + `src/la_rp_peace/backend_schema.sql` (`document_files`, `documents.doc_set`) on a new DB — no migrations | One source of truth with Marinadec; schema change → delete `data/larp.sqlite3` |
+| Parsing | python-docx, pymupdf, openpyxl → `original_text` + `source_map`; **AI parsing profile (OpenAI) always** | Methodology §1–§2 |
+| AI | `openai` SDK, JSON mode, model from `OPENAI_MODEL`; model regexes run with the `regex` engine under a timeout | No model-supplied code is executed |
+| Jobs | In-process `ThreadPoolExecutor(PARSER_WORKERS)`; pending documents requeued on startup | No Celery/Redis |
+| Tests | pytest; recorded model answers in `tests/fixtures/profiles/`; `pytest -m live` calls OpenAI | Suite runs offline |
 
 Run:
 
@@ -24,67 +24,86 @@ Run:
 uv run uvicorn la_rp_peace.api.app:create_app --factory --reload   # http://localhost:8000/docs
 ```
 
-Config (env or `.env`, see `.env.example`): `DATABASE_URL`, `MAX_UPLOAD_MB`, `CORS_ORIGINS`, `LOG_LEVEL`.
+Config (env or `.env`, see `.env.example`): `DATABASE_URL`, `MAX_UPLOAD_MB`, `CORS_ORIGINS`,
+`LOG_LEVEL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`, `PROFILE_MAX_CHARS`,
+`PROFILE_RETRIES`, `PARSER_WORKERS`. Without the key and model, uploads return 503.
 
 ## Layout
 
 ```
 src/la_rp_peace/
-  config.py, db.py, models.py, enums.py
-  ingestion/     format parsers → clause tree (numbering.py), classify.py, service.py
-  api/           app.py (factory), deps.py, schemas.py, documents.py
-  analysis/      Marinadec — comparison stages (not yet present)
+  config.py, db.py, models.py (ORM over the methodology schema), enums.py, backend_schema.sql
+  quotes.py       verbatim quote matching (whitespace-insensitive, nothing else forgiven)
+  navigation.py   anchor / path / file location of stored nodes
+  sources.py      citation verification -> SourceRef
+  ingestion/
+    extract/      docx.py, pdf.py (line -> paragraph recovery), xlsx.py -> Extraction
+    prompt.py     what the model sees (sampled above PROFILE_MAX_CHARS)
+    profiler.py   OpenAIProfiler
+    profile.py    profile schema, compilation, self-checks of examples
+    tree.py       applies a profile: sections, clauses, lists, headings, tables, service
+    checks.py     methodology §8 checks -> parsing_issues
+    metadata.py   card fields verified against quotes -> metadata_evidence
+    analysis.py   answer -> checks -> feedback to the model, up to PROFILE_RETRIES
+    pipeline.py   register upload, background parsing, one-transaction save
+  api/            app.py (factory), documents.py, sources.py, schemas.py, deps.py
+  analysis/       Marinadec — comparison stages (not yet present)
 ```
 
-## Traceability contract (every conclusion → exact words)
+## Parsing pipeline (methodology stage 1)
+
+1. `POST /api/documents` registers the file (sha256, size, format, `doc_set`) as `pending`
+   and returns **202**; a worker takes it from there. Poll `GET /api/documents/{id}`.
+2. Extraction produces `original_text` (blocks joined by newlines, table cells by tabs,
+   whitespace normalised inside blocks) and a `source_map` of `{start, end, location}`: DOCX
+   body position, PDF page per line, XLSX sheet/row/column. PDF page numbers are kept as blocks.
+3. The model receives the document as `@offset [style] text` lines and answers
+   `{metadata, parsing_profile}`. The profile is validated (schema, regex compilation with
+   timeout, its own positive/negative examples), applied to the whole document, and the tree
+   checked; metadata quotes are located in `original_text`. Every problem goes back to the
+   model; after `PROFILE_RETRIES` the best answer is kept.
+4. One transaction writes text, source map, card + evidence, profile (with `studied_ranges`,
+   `attempts`), nodes and issues. Status: `validated` without open blocking issues, otherwise
+   `needs_review`. Extraction or model failures -> `needs_review` + blocking issue.
+
+On the control documents, DOCX and the Word-exported PDFs in `test_data/converted/` produce
+identical trees (tests enforce it): 14 sections, glued 3.10–3.12 and `10.Контроль качества`
+split out, two separate lists in 9.3, TOC and approval stamp as `service`, `5.5.3. ;` of
+ed. 8 reported as `empty_content`.
+
+## Traceability contract (every conclusion -> exact words)
 
 Non-negotiable for everything the analysis produces (tech task §7.4, §9):
 
 1. **A finding cites, never paraphrases.** Each claim carries citations
-   `{clause_id, quote}` for the side(s) it is about; a change cites **both** documents
+   `{node_id, quote}` for the side(s) it is about; a change cites **both** documents
    (e.g. «unit created» cites the before list without it and the after list with it).
-2. **The quote is copied word for word** from the clause text returned by
-   `GET /api/documents/{id}/clauses`. `sources.resolve_source()` (HTTP:
-   `POST /api/sources/resolve`) rejects any quote not found verbatim in the clause
-   (whitespace aside) — the analysis must drop or retry such a finding, never show it.
+2. **The quote is copied word for word** from a node's `text` (`GET /api/documents/{id}/nodes`).
+   `sources.resolve_source()` (HTTP: `POST /api/sources/resolve`) rejects any quote not found
+   verbatim in the node — the analysis must drop or retry such a finding, never show it.
 3. **A resolved source tells a person where to look** in the original file:
 
    | Field | Example |
    |---|---|
    | `document_name`, `set` | `…редакция_9….pdf`, `after` |
    | `path` | `Разд. 3 «Структура и организация работы внутреннего аудита» › п. 3.4 › подп. «а»` |
-   | `page` | `6` — PDF only; DOCX files carry no reliable page numbers |
-   | `paragraph_index` / `sheet`+`row` | DOCX paragraph position / Excel cell row |
-   | `quote`, `context`, `start`, `end` | the cited words, the full clause text, and their offsets in it for highlighting |
+   | `location` | `{"page": 6}` (PDF), `{"paragraph": 103}` (DOCX), `{"sheet", "row"}` (XLSX) |
+   | `quote`, `context`, `start`, `end` | the cited words, the node text, offsets in it for highlighting |
+   | `source_start`, `source_end` | offsets in the document's `original_text` |
 
    Clause numbers are part of the document text, so `path` + `quote` find the spot with
    Ctrl+F in Word or any PDF viewer.
 
-`GET /api/clauses/{clause_id}` returns a clause as a source quoting its whole text.
-The frontend's `SourceRef` (frontend.md §4) should follow this shape.
+`GET /api/nodes/{node_id}` returns a node as a source quoting its whole text. The same
+quote check backs the metadata card: every card value has quotes in `metadata_evidence`.
 
 ## Slices
 
-### 1. Ingestion + document API — **done**
-
-Every upload is parsed into a **clause tree**: each clause has a stable id, dotted `number`,
-human citation `anchor` (`п. 5.3.2 «а»`, `разд. 10`, `лист «Оргструктура», стр. 3`), text,
-parent, and location (paragraph index / page / sheet+row). This is what every finding cites
-(§7.4, §9 — no claim without a source).
-
-Handled in real documents (`test_data/`): literal-text numbering, clauses glued into the previous
-paragraph (split only when the number is a valid successor, so «п.11 Положения» stays intact),
-letter/dash sub-items, unnumbered headings, table of contents skipped, merged table cells.
-`.doc`/`.xls` → 415 with «пересохраните как .docx/.xlsx». Scanned PDF without text → 422.
-Document type is guessed from title/filename (`classify.py`) and can be overridden (PATCH).
+### 1. Ingestion, AI profile, document API — **done**
 
 Endpoints: `POST/GET /api/documents`, `GET/PATCH/DELETE /api/documents/{id}`,
-`GET /api/documents/{id}/clauses`, `GET /api/documents/{id}/file`, `GET /api/health`.
-
-PDF paragraphs are rebuilt from lines (justified words merged, wrapped lines and page
-breaks joined, bold headings kept apart): the Word-exported PDFs in `test_data/converted/`
-slice exactly like their DOCX originals, which a test enforces. Every clause has a `path`
-and quotes are verified by `sources.py` (see the traceability contract above).
+`GET /api/documents/{id}/nodes|issues|profile|file`, `GET /api/nodes/{id}`,
+`POST /api/sources/resolve`, `GET /api/health`.
 
 ### 2. Analyses and live progress
 
@@ -98,10 +117,10 @@ and quotes are verified by `sources.py` (see the traceability contract above).
 ### 3. Seam for the methodology (agree with Marinadec before coding)
 
 Backend calls an ordered list of stages from `la_rp_peace.analysis`; each stage receives the
-analysis context (documents + clause trees + earlier stage outputs + a `report(message)` callback
-for the live log) and returns typed results. Findings must carry `SourceRef`s = clause id +
+analysis context (documents + node trees + earlier stage outputs + a `report(message)` callback
+for the live log) and returns typed results. Findings must carry `SourceRef`s = node id +
 quoted span, never free text. Stage names map 1:1 to the frontend stepper (frontend.md §2.2).
-LLM provider, prompts and keys are a methodology decision; backend only provides a config slot.
+The OpenAI client and settings from stage 1 are reusable; prompts are the methodology's.
 
 ### 4. Findings, verdicts, results
 
