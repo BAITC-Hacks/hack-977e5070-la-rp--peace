@@ -4,11 +4,9 @@ This file provides coding and git guidelines for AI coding agents.
 
 **Stack:** Python, managed with `uv`. Linting and formatting with `ruff` are mandatory.
 
-> **Setup gap:** there is no `pyproject.toml` in this repo yet, so the `uv run ruff ...`
-> commands below cannot execute (`uv run ruff --version` currently fails with
-> `program not found`). The first commit that introduces code must add `pyproject.toml`
-> declaring `ruff` and the ruff rule set in this file. Until then these commands are
-> mandatory in intent but not yet runnable.
+> **Environment:** Python 3.12 (pinned in `.python-version`), dependencies and tool
+> config in `pyproject.toml`, lockfile `uv.lock` committed. Run `uv sync` once after
+> cloning. The ruff rule set below is wired into `[tool.ruff.lint]` -- keep the two in sync.
 
 ## Mandatory Agent Rules
 
@@ -82,7 +80,7 @@ except Exception as exc:
 
 ## Ruff Rule Set
 
-The following ruff rules are enforced (to be configured in `pyproject.toml`):
+The following ruff rules are enforced (configured in `pyproject.toml`):
 
 | Rule | Purpose |
 |---|---|
@@ -116,12 +114,21 @@ Ignored rules (with justification):
 | `S324` | sha1/md5 hashing — used for cache keys, not security |
 | `TC` | Type-checking import guards — deferred; `strict = true` breaks Pydantic models |
 
-## Project Layout — TBD
+## Project Layout
 
-No application code exists yet. Record here, in the commit that introduces it: the
-package layout (single package vs. `uv` workspace members), the target Python version,
-and the location of the test suite. Until that is written down, the mypy invocations in
-step 1 below must be adjusted to match whatever layout actually lands.
+Python 3.12. Currently a **non-package project** (`package = false`) -- there is no
+importable package yet, because the project scope is not defined. When code lands:
+
+- Add the package (and a `[build-system]`, dropping `package = false` if it should be
+  installable), then set `known-first-party` under `[tool.ruff.lint.isort]`.
+- Add `tests/` and set `testpaths = ["tests"]` under `[tool.pytest.ini_options]`.
+- If the project becomes a `uv` workspace, run `mypy` once per member instead of once
+  at the root.
+
+**Until then, two of the four checks in step 1 fail for lack of code, not for lack of
+correctness:** `mypy .` exits 2 (`no .py[i] files`) and `pytest` exits 5 (no tests
+collected). Both must go green with the first real module and its test. Do not silence
+them with stub modules or empty test files -- see Mandatory Agent Rule 1.
 
 ## Validation & Git Workflow
 

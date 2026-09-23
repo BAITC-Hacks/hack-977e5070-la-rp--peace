@@ -1,0 +1,81 @@
+[project]
+name = "la-rp-peace"
+version = "0.1.0"
+description = "Hackathon project for team la(rp)-peace"
+requires-python = ">=3.12"
+dependencies = [
+    "structlog>=25.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
+    "pytest>=8.3.0",
+]
+
+[tool.uv]
+package = false
+
+# ---------------------------------------------------------------------------
+# ruff -- rule set mirrors .agents/guidelines.md; keep the two in sync.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort (import sorting)
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "SIM",  # flake8-simplify
+    "S",    # flake8-bandit (security)
+    "C4",   # flake8-comprehensions
+    "PT",   # flake8-pytest-style
+    "RET",  # flake8-return
+    "ARG",  # flake8-unused-arguments
+    "PTH",  # flake8-use-pathlib
+    "ICN",  # flake8-import-conventions
+    "PERF", # perflint
+    "C901", # McCabe complexity
+    "RUF",  # Ruff-specific rules
+    "D",    # pydocstyle (Google-style docstrings)
+]
+ignore = [
+    "RUF001", # Ambiguous Cyrillic chars -- false positives in Russian-language strings
+    "RUF002", # Ambiguous chars in docstrings -- intentional math/typography
+    "RUF003", # Ambiguous chars in comments -- intentional math/typography
+    "S324",   # sha1/md5 hashing -- used for cache keys, not security
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101", # pytest relies on bare assert
+    "D",    # docstrings not required in tests
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# ---------------------------------------------------------------------------
+# mypy -- strict, zero errors required.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+
+# ---------------------------------------------------------------------------
+# pytest -- add `testpaths = ["tests"]` once the suite exists.
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
