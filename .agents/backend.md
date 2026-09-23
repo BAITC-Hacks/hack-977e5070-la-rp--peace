@@ -11,17 +11,16 @@ the frontend: [`frontend.md`](frontend.md) §4.
 | Concern | Choice | Why |
 |---|---|---|
 | API | FastAPI + uvicorn, sync endpoints | Typed, OpenAPI at `/docs` for Sula for free |
-| DB | PostgreSQL 16 (`compose.yaml`), SQLAlchemy 2 sync ORM, psycopg 3 | One `docker compose up`; no async ORM overhead |
-| Schema | `Base.metadata.create_all()` on startup — **no migrations** | Six hours. Schema change → `docker compose down -v` |
-| Files | Original bytes stored in Postgres (`documents.content`, deferred) | No volume/path management; files are ~100 KB |
+| DB | SQLite file `data/larp.sqlite3`, SQLAlchemy 2 sync ORM; foreign keys + WAL set on every connection | No server to run; the methodology schema targets SQLite |
+| Schema | Created on startup — **no migrations** | Six hours. Schema change → delete `data/larp.sqlite3` |
+| Files | Original bytes stored in the database | One file to copy or reset; files are ~100 KB |
 | Parsing | python-docx, pymupdf, openpyxl | .docx / .pdf / .xlsx from the task (§5) |
 | Jobs | In-process `ThreadPoolExecutor(max_workers=1)` — no Celery/Redis | One demo user; one moving part less |
-| Tests | pytest on in-memory SQLite (models use portable types only) | Suite runs without Docker |
+| Tests | pytest on in-memory SQLite | Same engine as production |
 
 Run:
 
 ```bash
-docker compose up -d db
 uv run uvicorn la_rp_peace.api.app:create_app --factory --reload   # http://localhost:8000/docs
 ```
 

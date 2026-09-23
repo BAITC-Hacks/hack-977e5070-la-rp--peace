@@ -15,7 +15,7 @@ def _new_id() -> str:
 
 
 def _str_enum[E: (DocSet, DocType, DocFormat, ClauseKind)](enum_cls: type[E]) -> Enum:
-    """Store enum values (not names) as VARCHAR, portable across Postgres and SQLite."""
+    """Store enum values (not names) as VARCHAR."""
     return Enum(
         enum_cls,
         native_enum=False,

@@ -11,17 +11,16 @@ Read these before doing anything:
 | [`.agents/guidelines.md`](.agents/guidelines.md) | Coding conventions, ruff/mypy rule set, validation commands |
 | [`.agents/git-workflow.md`](.agents/git-workflow.md) | Branching, PRs, conflict resolution, six-hour cadence |
 | [`.agents/frontend.md`](.agents/frontend.md) | Frontend scope, UI elements, Svelte stack + Svelte MCP, API contract |
-| [`.agents/backend.md`](.agents/backend.md) | Backend stack, Postgres, ingestion, slices, seam for the methodology |
+| [`.agents/backend.md`](.agents/backend.md) | Backend stack, SQLite, ingestion, slices, seam for the methodology |
 
 ## Setup
 
 ```bash
 uv sync
-docker compose up -d db                                            # Postgres 16
 uv run uvicorn la_rp_peace.api.app:create_app --factory --reload   # API on :8000, docs at /docs
 ```
 
-The pytest suite uses in-memory SQLite and does not need Docker.
+Data lives in one SQLite file, `data/larp.sqlite3` (git-ignored). Tests use in-memory SQLite.
 
 ## Ownership
 
@@ -31,7 +30,7 @@ Shared files need a heads-up in team chat before changing them.
 | Area | Owner | Paths |
 |---|---|---|
 | Frontend (SvelteKit UI) | Sula | `frontend/`, `.agents/frontend.md` |
-| Backend & DB | Alim | `src/la_rp_peace/` (except `analysis/`), `tests/` (except `tests/analysis/`), `compose.yaml`, `.env.example`, `.agents/backend.md` |
+| Backend & DB | Alim | `src/la_rp_peace/` (except `analysis/`), `tests/` (except `tests/analysis/`), `.env.example`, `.agents/backend.md` |
 | Methodology & analysis | Marinadec | `docs/methodology/`, `src/la_rp_peace/analysis/`, `tests/analysis/` |
 | Shared (ask first) | everyone | `pyproject.toml`, `uv.lock`, `.mcp.json`, `test_data/`, shared models/interfaces, API contract (`.agents/frontend.md` §4) |
 

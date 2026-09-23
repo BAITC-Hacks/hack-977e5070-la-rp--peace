@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """Runtime configuration for the backend.
 
     Attributes:
-        database_url: SQLAlchemy URL of the database.
+        database_url: SQLAlchemy SQLite URL of the database file.
         max_upload_mb: Largest accepted upload, in megabytes.
         cors_origins: Origins allowed to call the API from a browser.
         log_level: Minimum structlog level.
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://larp:larp@localhost:5432/larp"
+    database_url: str = "sqlite:///data/larp.sqlite3"
     max_upload_mb: int = 20
     cors_origins: list[str] = ["http://localhost:5173"]
     log_level: str = "INFO"
