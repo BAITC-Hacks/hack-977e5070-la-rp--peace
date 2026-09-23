@@ -242,6 +242,41 @@ other participants with names, sources `{node_id, path, location, quote, start, 
 `GET /api/documents/{id}/activity-report` (status, record count, block marks, issues),
 `POST /api/documents/{id}/activities` → 202, re-runs stage 3 and later stages (503 without a model).
 
+### 8. Function collisions (4.1)
+
+`src/la_rp_peace/collisions/`: `CollisionStage` (`name = "collisions"`) runs after activities when
+both `entities_status` and `activities_status` are `done`/`needs_review` (otherwise
+`collisions_status = not_started`, stale 4.1 rows removed). It is chained only when
+`OPENAI_API_KEY` is set (it needs `OPENAI_EMBEDDING_MODEL`); retries = `ANALYSIS_RETRIES`.
+
+1. `sides.py`: compared sides = function/duty records with a known entity (`R<id>`); records with
+   participation `joint` sharing a `provision_key` become ONE consolidated view (`V<key>`, all
+   participants, parents, categories, source records, conditions). `each`/`alternative`/`unclear`
+   are never consolidated. Goals, tasks, rights, prohibitions of the same entities are context only.
+2. `pairs.py`: local basis = two different participants that are children of the same resolved
+   parent (any categories); category basis = two different participants of one category
+   (`unclear`/`other` excluded). Never paired: two records of one entity, a view with its own
+   records. Unordered pairs, both bases kept with the participants that gave them. Every allowed
+   pair with raw cosine STRICTLY > 0.75 is verified (no top-k, no rounding).
+3. `prompt.py` + `verification.ask_in_batches` (10 per request): the methodology's instruction
+   verbatim, six checks; each question has both sides, bases, similarity, stage 3 quotes with node
+   paths, full texts of the cited nodes and the context records. `checks.py`: verdict, strict shape,
+   sources verbatim in THIS document; explanation minus similarity phrases («тексты похожи»,
+   «высокое сходство», numbers) must keep ≥ 8 words; `collision` needs a `side_a` source among side A's
+   stage 3 nodes AND a `side_b` source among side B's; `no_collision` needs ≥ 1 source;
+   `insufficient_data` must say what is missing. Unanswered/invalid ⇒ pair `status = error`, never a verdict.
+4. `store.py`: one transaction replaces `collision_runs` (coverage per path, compared sides, model,
+   metric, text format), `collision_views` + `collision_view_records`, `collision_pairs` (one row per
+   pair, sides as record/view FKs, bases, similarity, verdict/explanation or error) and
+   `collision_sources`; composite `(document_id, id)` keys. Status `needs_review` with errors or any
+   `collision`/`insufficient_data`, else `done`; a crash ⇒ `failed`, previous result kept.
+
+Endpoints: `GET /api/documents/{id}/collisions` (pairs grouped `collision`/`no_collision`/
+`insufficient_data`/`errors`, both sides with participants, parents, formulations and stage 3 sources,
+verdict sources `{node_id, path, location, quote, start, end, supports}`),
+`GET /api/documents/{id}/collision-report` (status, coverage per path, pairs sent, verdict and error
+counts), `POST /api/documents/{id}/collisions` → 202 (503 without a model or embeddings, 404 unknown).
+
 ## Not doing
 
 Auth, multi-tenancy, migrations, OCR, background workers outside the API process,

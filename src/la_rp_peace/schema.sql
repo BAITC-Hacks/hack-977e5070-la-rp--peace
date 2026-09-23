@@ -379,6 +379,144 @@ CREATE TABLE embedding_cache (
 
 -- Stage 4.1 tables (function collisions) go below this line.
 
+-- Stage 4.1 (methodology/04_1_function_collisions.md): pairs of function/duty assignments of ONE
+-- document selected by embeddings (similarity strictly above 0.75) and verified by the model.
+-- A re-run deletes and rewrites all of these rows in one transaction. Composite keys
+-- (document_id, id) keep views, pairs, records and sources inside the same document.
+
+-- Coverage of the latest run: compared sides and pairs per search path (allowed / above threshold).
+CREATE TABLE collision_runs (
+    document_id INTEGER PRIMARY KEY REFERENCES documents (id) ON DELETE CASCADE,
+    threshold REAL NOT NULL,
+    embedding_model TEXT NOT NULL CHECK (trim(embedding_model) <> ''),
+    metric TEXT NOT NULL CHECK (trim(metric) <> ''),
+    text_format TEXT NOT NULL CHECK (trim(text_format) <> ''),
+    compared_records INTEGER NOT NULL CHECK (compared_records >= 0),
+    compared_views INTEGER NOT NULL CHECK (compared_views >= 0),
+    context_records INTEGER NOT NULL CHECK (context_records >= 0),
+    local_pairs INTEGER NOT NULL CHECK (local_pairs >= 0),
+    local_above INTEGER NOT NULL CHECK (local_above >= 0 AND local_above <= local_pairs),
+    category_pairs INTEGER NOT NULL CHECK (category_pairs >= 0),
+    category_above INTEGER NOT NULL CHECK (category_above >= 0 AND category_above <= category_pairs),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+) STRICT;
+
+-- One consolidated view of a joint assignment: the records of one provision_key with participation
+-- 'joint'. Analytical only: it creates no entity and assigns nothing to the participants' parent.
+CREATE TABLE collision_views (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    provision_key TEXT NOT NULL CHECK (length(provision_key) = 16),
+    record_type TEXT NOT NULL CHECK (record_type IN ('function', 'duty')),
+    formulation TEXT NOT NULL CHECK (trim(formulation) <> ''),
+    -- JSON arrays: known participants, their resolved parents and their categories.
+    participant_entity_ids TEXT NOT NULL CHECK (
+        CASE WHEN json_valid(participant_entity_ids)
+            THEN json_type(participant_entity_ids) = 'array' AND json_array_length(participant_entity_ids) > 0
+            ELSE 0 END
+    ),
+    parent_entity_ids TEXT NOT NULL DEFAULT '[]' CHECK (
+        CASE WHEN json_valid(parent_entity_ids) THEN json_type(parent_entity_ids) = 'array' ELSE 0 END
+    ),
+    categories TEXT NOT NULL DEFAULT '[]' CHECK (
+        CASE WHEN json_valid(categories) THEN json_type(categories) = 'array' ELSE 0 END
+    ),
+    -- The exact text that was embedded (format activity-v1).
+    embedded_text TEXT NOT NULL CHECK (trim(embedded_text) <> ''),
+    CONSTRAINT collision_views_document_identity UNIQUE (document_id, id),
+    CONSTRAINT collision_views_one_per_provision UNIQUE (document_id, provision_key)
+) STRICT;
+
+-- Source records of a view (the stage 3 records stay unchanged).
+CREATE TABLE collision_view_records (
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    view_id INTEGER NOT NULL,
+    record_id INTEGER NOT NULL,
+    PRIMARY KEY (view_id, record_id),
+    CONSTRAINT collision_view_records_view_same_document
+        FOREIGN KEY (document_id, view_id) REFERENCES collision_views (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT collision_view_records_record_same_document
+        FOREIGN KEY (document_id, record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE
+) STRICT;
+
+-- One row per unordered pair of sides, however many search paths found it.
+CREATE TABLE collision_pairs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    -- Sorted side keys, e.g. 'R12|V3': swapping the sides gives the same pair.
+    pair_key TEXT NOT NULL CHECK (trim(pair_key) <> ''),
+    side_a_kind TEXT NOT NULL CHECK (side_a_kind IN ('record', 'view')),
+    side_a_record_id INTEGER,
+    side_a_view_id INTEGER,
+    side_b_kind TEXT NOT NULL CHECK (side_b_kind IN ('record', 'view')),
+    side_b_record_id INTEGER,
+    side_b_view_id INTEGER,
+    -- JSON array of 'local' / 'category'; details say which participants gave each basis.
+    bases TEXT NOT NULL CHECK (
+        CASE WHEN json_valid(bases) THEN json_type(bases) = 'array' AND json_array_length(bases) > 0 ELSE 0 END
+    ),
+    basis_details TEXT NOT NULL CHECK (
+        CASE WHEN json_valid(basis_details) THEN json_type(basis_details) = 'array' ELSE 0 END
+    ),
+    -- Raw cosine similarity; only pairs strictly above the threshold are stored.
+    similarity REAL NOT NULL CHECK (similarity > 0.75 AND similarity <= 1.000001),
+    embedding_model TEXT NOT NULL CHECK (trim(embedding_model) <> ''),
+    metric TEXT NOT NULL CHECK (trim(metric) <> ''),
+    text_format TEXT NOT NULL CHECK (trim(text_format) <> ''),
+    question_id TEXT NOT NULL CHECK (trim(question_id) <> ''),
+    status TEXT NOT NULL CHECK (status IN ('checked', 'error')),
+    verdict TEXT CHECK (verdict IS NULL OR verdict IN ('collision', 'no_collision', 'insufficient_data')),
+    explanation TEXT,
+    error TEXT,
+    attempts INTEGER NOT NULL CHECK (attempts >= 0),
+    CONSTRAINT collision_pairs_document_identity UNIQUE (document_id, id),
+    CONSTRAINT collision_pairs_one_per_pair UNIQUE (document_id, pair_key),
+    CONSTRAINT collision_pairs_side_a CHECK (
+        (side_a_kind = 'record' AND side_a_record_id IS NOT NULL AND side_a_view_id IS NULL)
+        OR (side_a_kind = 'view' AND side_a_view_id IS NOT NULL AND side_a_record_id IS NULL)
+    ),
+    CONSTRAINT collision_pairs_side_b CHECK (
+        (side_b_kind = 'record' AND side_b_record_id IS NOT NULL AND side_b_view_id IS NULL)
+        OR (side_b_kind = 'view' AND side_b_view_id IS NOT NULL AND side_b_record_id IS NULL)
+    ),
+    CONSTRAINT collision_pairs_distinct_sides CHECK (
+        side_a_record_id IS NOT side_b_record_id OR side_a_view_id IS NOT side_b_view_id
+    ),
+    -- An error is never a verdict; a verdict always carries its explanation.
+    CONSTRAINT collision_pairs_outcome CHECK (
+        (status = 'checked' AND verdict IS NOT NULL AND trim(coalesce(explanation, '')) <> '' AND error IS NULL)
+        OR (status = 'error' AND verdict IS NULL AND trim(coalesce(error, '')) <> '')
+    ),
+    CONSTRAINT collision_pairs_a_record_same_document
+        FOREIGN KEY (document_id, side_a_record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT collision_pairs_a_view_same_document
+        FOREIGN KEY (document_id, side_a_view_id) REFERENCES collision_views (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT collision_pairs_b_record_same_document
+        FOREIGN KEY (document_id, side_b_record_id) REFERENCES activity_records (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT collision_pairs_b_view_same_document
+        FOREIGN KEY (document_id, side_b_view_id) REFERENCES collision_views (document_id, id) ON DELETE CASCADE
+) STRICT;
+
+-- Verified evidence of a verdict: quote_start/quote_end index document_nodes.text of node_id.
+CREATE TABLE collision_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
+    pair_id INTEGER NOT NULL,
+    node_id INTEGER NOT NULL,
+    quote TEXT NOT NULL CHECK (trim(quote) <> ''),
+    quote_start INTEGER NOT NULL CHECK (quote_start >= 0),
+    quote_end INTEGER NOT NULL,
+    -- JSON array of side_a, side_b, context.
+    supports TEXT NOT NULL CHECK (
+        CASE WHEN json_valid(supports) THEN json_type(supports) = 'array' ELSE 0 END
+    ),
+    CONSTRAINT collision_sources_range CHECK (quote_end > quote_start),
+    CONSTRAINT collision_sources_pair_same_document
+        FOREIGN KEY (document_id, pair_id) REFERENCES collision_pairs (document_id, id) ON DELETE CASCADE,
+    CONSTRAINT collision_sources_node_same_document
+        FOREIGN KEY (document_id, node_id) REFERENCES document_nodes (document_id, id) ON DELETE CASCADE
+) STRICT;
+
 -- Stage 4.2 tables (function cascade) go below this line.
 
 COMMIT;

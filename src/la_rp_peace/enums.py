@@ -192,6 +192,33 @@ class AnalysisStatus(StrEnum):
 
 
 # Stage 4.1 enums (function collisions) go below this line.
+class CollisionVerdict(StrEnum):
+    """The model's verified verdict on one pair of assignments (4.1 §5)."""
+
+    COLLISION = "collision"
+    NO_COLLISION = "no_collision"
+    INSUFFICIENT_DATA = "insufficient_data"
+
+
+class CollisionPairStatus(StrEnum):
+    """Processing outcome of one pair: a verified verdict, or an error that is never a verdict."""
+
+    CHECKED = "checked"
+    ERROR = "error"
+
+
+class CollisionSideKind(StrEnum):
+    """What one side of a pair is: a stage 3 record, or a consolidated joint assignment."""
+
+    RECORD = "record"
+    VIEW = "view"
+
+
+class SearchBasis(StrEnum):
+    """Search path that found a pair (4.1 §1): children of one parent, or one category."""
+
+    LOCAL = "local"
+    CATEGORY = "category"
 
 
 # Stage 4.2 enums (function cascade) go below this line.

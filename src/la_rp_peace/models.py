@@ -259,6 +259,93 @@ class EmbeddingCache(Base):
 
 
 # Stage 4.1 models (function collisions) go below this line.
+class CollisionRun(Base):
+    """Coverage of the latest stage 4.1 run of a document: compared sides and pairs per search path."""
+
+    __tablename__ = "collision_runs"
+
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True)
+    threshold: Mapped[float] = mapped_column()
+    embedding_model: Mapped[str] = mapped_column(Text)
+    metric: Mapped[str] = mapped_column(Text)
+    text_format: Mapped[str] = mapped_column(Text)
+    compared_records: Mapped[int] = mapped_column(Integer)
+    compared_views: Mapped[int] = mapped_column(Integer)
+    context_records: Mapped[int] = mapped_column(Integer)
+    local_pairs: Mapped[int] = mapped_column(Integer)
+    local_above: Mapped[int] = mapped_column(Integer)
+    category_pairs: Mapped[int] = mapped_column(Integer)
+    category_above: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[str] = mapped_column(Text, default=utc_timestamp)
+
+
+class CollisionView(Base):
+    """A consolidated view of one joint assignment (records of one provision with joint participation)."""
+
+    __tablename__ = "collision_views"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    provision_key: Mapped[str] = mapped_column(Text)
+    record_type: Mapped[str] = mapped_column(Text)
+    formulation: Mapped[str] = mapped_column(Text)
+    participant_entity_ids: Mapped[str] = mapped_column(Text)
+    parent_entity_ids: Mapped[str] = mapped_column(Text, default="[]")
+    categories: Mapped[str] = mapped_column(Text, default="[]")
+    embedded_text: Mapped[str] = mapped_column(Text)
+
+
+class CollisionViewRecord(Base):
+    """A stage 3 record consolidated into a view."""
+
+    __tablename__ = "collision_view_records"
+
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    view_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    record_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+
+class CollisionPair(Base):
+    """One unordered pair of assignments above the threshold and its verification outcome."""
+
+    __tablename__ = "collision_pairs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    pair_key: Mapped[str] = mapped_column(Text)
+    side_a_kind: Mapped[str] = mapped_column(Text)
+    side_a_record_id: Mapped[int | None] = mapped_column(Integer)
+    side_a_view_id: Mapped[int | None] = mapped_column(Integer)
+    side_b_kind: Mapped[str] = mapped_column(Text)
+    side_b_record_id: Mapped[int | None] = mapped_column(Integer)
+    side_b_view_id: Mapped[int | None] = mapped_column(Integer)
+    bases: Mapped[str] = mapped_column(Text)
+    basis_details: Mapped[str] = mapped_column(Text)
+    similarity: Mapped[float] = mapped_column()
+    embedding_model: Mapped[str] = mapped_column(Text)
+    metric: Mapped[str] = mapped_column(Text)
+    text_format: Mapped[str] = mapped_column(Text)
+    question_id: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text)
+    verdict: Mapped[str | None] = mapped_column(Text)
+    explanation: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer)
+
+
+class CollisionSource(Base):
+    """A verified verbatim quote backing a pair's verdict."""
+
+    __tablename__ = "collision_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    pair_id: Mapped[int] = mapped_column(Integer)
+    node_id: Mapped[int] = mapped_column(Integer)
+    quote: Mapped[str] = mapped_column(Text)
+    quote_start: Mapped[int] = mapped_column(Integer)
+    quote_end: Mapped[int] = mapped_column(Integer)
+    supports: Mapped[str] = mapped_column(Text)
 
 
 # Stage 4.2 models (function cascade) go below this line.
