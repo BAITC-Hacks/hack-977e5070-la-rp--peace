@@ -12,6 +12,13 @@ describe('errorMessage', () => {
 		expect(errorMessage({ detail }, status)).toBe(detail);
 	});
 
+	it('explains a request the backend has no route for yet', () => {
+		expect(errorMessage({ detail: 'Not Found' }, 404)).toBe(
+			'Сервер пока не поддерживает этот запрос (HTTP 404)'
+		);
+		expect(errorMessage({ detail: 'Документ не найден' }, 404)).toBe('Документ не найден');
+	});
+
 	it('joins the messages of a validation error', () => {
 		const body = { detail: [{ msg: 'Field required' }, { msg: 'Input should be a valid enum' }] };
 		expect(errorMessage(body, 422)).toBe('Field required; Input should be a valid enum');

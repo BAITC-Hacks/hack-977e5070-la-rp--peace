@@ -1,19 +1,34 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 
-	import { documentsApi } from '$lib/api/client';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import type { Pathname } from '$app/types';
+	import { analysesApi, documentsApi } from '$lib/api/client';
 	import UploadZone from '$lib/components/UploadZone.svelte';
 	import { DOC_SETS } from '$lib/documents';
+	import { AnalysisLauncher, launchBlocker } from '$lib/upload/launch.svelte';
 	import { UploadSession } from '$lib/upload/session.svelte';
 
 	const session = new UploadSession(documentsApi);
 	// Leaving the page (e.g. to a document's structure) stops polling the files still being parsed.
 	onDestroy(() => session.dispose());
+	const launcher = new AnalysisLauncher(analysesApi);
+	const hintId = $props.id();
 	const required = DOC_SETS.filter((info) => !info.optional);
 	const external = DOC_SETS.filter((info) => info.optional);
 	const externalCount = $derived(
 		external.reduce((count, info) => count + session.itemsIn(info.set).length, 0)
 	);
+	const blocker = $derived(launchBlocker(session.items));
+
+	async function onStart() {
+		const id = await launcher.start(session.items);
+		if (id !== null) {
+			// routes/analyses/[id] is built in parallel; the cast goes once the route exists.
+			await goto(resolve(`/analyses/${id}` as Pathname));
+		}
+	}
 </script>
 
 <svelte:head><title>Анализ реорганизации</title></svelte:head>
@@ -64,4 +79,22 @@
 			{/each}
 		</div>
 	</details>
+
+	<div class="grid justify-items-start gap-2">
+		<button
+			type="button"
+			class="rounded-md bg-accent px-[18px] py-2.5 font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50"
+			disabled={blocker !== null || launcher.starting}
+			aria-describedby={blocker || launcher.error ? hintId : undefined}
+			onclick={onStart}
+		>
+			{launcher.starting ? 'Запуск…' : 'Начать анализ'}
+		</button>
+		<!-- What blocks the start now matters more than why the last attempt failed. -->
+		{#if blocker}
+			<p id={hintId} class="text-sm text-muted">{blocker}</p>
+		{:else if launcher.error}
+			<p id={hintId} class="text-sm text-bad" role="alert">{launcher.error}</p>
+		{/if}
+	</div>
 </div>

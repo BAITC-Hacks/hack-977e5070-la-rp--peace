@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/public';
 
 import { ApiError, NETWORK_ERROR_MESSAGE, errorMessage } from './errors';
-import type { DocSet, DocumentOut } from './types';
+import type { AnalysisOut, DocSet, DocumentOut } from './types';
 
 /** Base URL of the FastAPI backend; the default matches its local `uvicorn` run and CORS config. */
 export const API_URL = (env.PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
@@ -79,3 +79,20 @@ async function remove(id: number): Promise<void> {
 }
 
 export const documentsApi: DocumentsApi = { upload, get, setType, remove };
+
+/** Starting an analysis; injected so the start logic is testable. */
+export interface AnalysesApi {
+	/** `POST /api/analyses` with `{name, document_ids}` (proposed contract, see `AnalysisOut`). */
+	start(name: string, documentIds: number[]): Promise<AnalysisOut>;
+}
+
+async function startAnalysis(name: string, documentIds: number[]): Promise<AnalysisOut> {
+	const response = await request('/api/analyses', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ name, document_ids: documentIds })
+	});
+	return (await response.json()) as AnalysisOut;
+}
+
+export const analysesApi: AnalysesApi = { start: startAnalysis };

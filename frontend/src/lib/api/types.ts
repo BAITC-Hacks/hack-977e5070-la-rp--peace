@@ -39,3 +39,16 @@ export interface DocumentOut {
 	blocking_issues: number;
 	other_issues: number;
 }
+
+/** Lifecycle of an analysis run, as planned in .agents/backend.md «Analyses and live progress». */
+export type AnalysisStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+
+/**
+ * An analysis run as `POST /api/analyses` answers it. Proposed contract (.agents/frontend.md §4):
+ * the backend does not serve analyses yet.
+ */
+export interface AnalysisOut {
+	id: number;
+	name: string;
+	status: AnalysisStatus;
+}

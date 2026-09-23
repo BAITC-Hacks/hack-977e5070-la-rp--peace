@@ -16,6 +16,9 @@ export class ApiError extends Error {
 
 export const NETWORK_ERROR_MESSAGE = 'Сервер недоступен. Проверьте, что бэкенд запущен.';
 
+/** Starlette's detail for a path with no route; the backend's own handlers answer in Russian. */
+const NO_ROUTE_DETAIL = 'Not Found';
+
 /**
  * Extracts a human-readable message from a FastAPI error body.
  *
@@ -25,6 +28,9 @@ export const NETWORK_ERROR_MESSAGE = 'Сервер недоступен. Про�
 export function errorMessage(body: unknown, status: number): string {
 	const detail =
 		typeof body === 'object' && body !== null ? Reflect.get(body, 'detail') : undefined;
+	if (detail === NO_ROUTE_DETAIL) {
+		return `Сервер пока не поддерживает этот запрос (HTTP ${status})`;
+	}
 	if (typeof detail === 'string' && detail.length > 0) {
 		return detail;
 	}
@@ -39,4 +45,13 @@ export function errorMessage(body: unknown, status: number): string {
 		}
 	}
 	return `Ошибка сервера (HTTP ${status})`;
+}
+
+/** Message to show for a failed call; anything but an `ApiError` is a bug and is logged too. */
+export function describeError(error: unknown): string {
+	if (error instanceof ApiError) {
+		return error.message;
+	}
+	console.error(error);
+	return error instanceof Error ? error.message : String(error);
 }

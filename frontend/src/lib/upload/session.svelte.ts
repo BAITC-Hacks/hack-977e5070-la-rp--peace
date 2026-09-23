@@ -1,5 +1,5 @@
 import type { DocumentsApi } from '$lib/api/client';
-import { ApiError } from '$lib/api/errors';
+import { ApiError, describeError } from '$lib/api/errors';
 import type { DocSet, DocumentOut, ParseStatus } from '$lib/api/types';
 
 import { isAccepted } from './files';
@@ -66,14 +66,6 @@ export class UploadItem {
 	}
 }
 
-function messageOf(error: unknown): string {
-	if (error instanceof ApiError) {
-		return error.message;
-	}
-	console.error(error);
-	return error instanceof Error ? error.message : String(error);
-}
-
 function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -133,7 +125,7 @@ export class UploadSession {
 			item.document = await this.#api.setType(previous.id, value);
 		} catch (error) {
 			item.document = previous;
-			item.error = messageOf(error);
+			item.error = describeError(error);
 		} finally {
 			item.busy = false;
 		}
@@ -152,7 +144,7 @@ export class UploadSession {
 			} catch (error) {
 				const alreadyGone = error instanceof ApiError && error.status === 404;
 				if (!alreadyGone) {
-					item.error = messageOf(error);
+					item.error = describeError(error);
 					item.busy = false;
 					return;
 				}
@@ -173,7 +165,7 @@ export class UploadSession {
 
 	#fail(item: UploadItem, error: unknown): void {
 		item.status = 'failed';
-		item.error = messageOf(error);
+		item.error = describeError(error);
 		item.retriable = error instanceof ApiError && error.retriable;
 	}
 
