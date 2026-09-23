@@ -41,6 +41,7 @@ src/lib/upload/       логика экрана загрузки: форматы
 src/lib/documents.ts  типы документов и комплекты «до» / «после» / нормативка / бенчмаркинг
 src/lib/components/   UploadZone, FileRow
 src/routes/           «/» — новый анализ (загрузка)
+src/routes/layout.css цвета и шрифты из docs/spec/prototype.html: светлая и тёмная тема
 ```
 
 Логика вынесена из компонентов в модули, чтобы тестировать её без браузера; API в

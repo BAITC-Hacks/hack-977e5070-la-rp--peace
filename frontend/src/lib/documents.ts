@@ -28,33 +28,36 @@ export interface DocSetInfo {
 	set: DocSet;
 	title: string;
 	hint: string;
-	/** Both «before» and «after» need documents; the other sets are optional (tech task §8). */
+	/**
+	 * «До» and «После» are one required document each (docs/spec/tz_site.md §6.1); the external
+	 * sets are optional and take any number of files.
+	 */
 	optional: boolean;
 }
 
 export const DOC_SETS: readonly DocSetInfo[] = [
 	{
 		set: 'before',
-		title: 'До реорганизации',
-		hint: 'Оргструктура, положения о подразделениях, должностные инструкции и распорядительные документы до изменений.',
+		title: 'Документ «До»',
+		hint: 'Редакция до реорганизации: положение о подразделении, оргструктура или штатное расписание.',
 		optional: false
 	},
 	{
 		set: 'after',
-		title: 'После реорганизации',
-		hint: 'Те же виды документов в редакции после изменений.',
+		title: 'Документ «После»',
+		hint: 'Тот же документ в редакции после реорганизации.',
 		optional: false
 	},
 	{
 		set: 'regulatory',
-		title: 'Нормативные требования',
-		hint: 'Законы, стандарты и регуляторные требования, которым должны соответствовать функции подразделений.',
+		title: 'НПА и регулирующие документы',
+		hint: 'Законы, стандарты и требования регулятора к функциям подразделений.',
 		optional: true
 	},
 	{
 		set: 'benchmark',
-		title: 'Бенчмаркинг',
-		hint: 'Организационные структуры других операторов для сравнения.',
+		title: 'Документы других операторов',
+		hint: 'Оргструктуры и положения других операторов для сравнения.',
 		optional: true
 	}
 ];

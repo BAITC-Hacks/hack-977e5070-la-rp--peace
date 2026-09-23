@@ -14,10 +14,10 @@
 	const format = $derived(extensionOf(item.file.name).slice(1).toUpperCase());
 	const badgeClass = $derived(
 		format === 'PDF'
-			? 'bg-red-100 text-red-800'
+			? 'bg-bad-soft text-bad'
 			: format.startsWith('XLS')
-				? 'bg-emerald-100 text-emerald-800'
-				: 'bg-blue-100 text-blue-800'
+				? 'bg-ok-soft text-ok'
+				: 'bg-accent-soft text-accent'
 	);
 
 	function onTypeChange(event: Event & { currentTarget: HTMLSelectElement }) {
@@ -28,16 +28,19 @@
 	}
 </script>
 
-<li class="rounded-lg border border-slate-200 bg-white p-3">
+<li class="rounded-md border border-line bg-surface p-3">
 	<div class="flex items-center gap-3">
 		<span
-			class={['w-12 shrink-0 rounded px-1.5 py-1 text-center text-xs font-semibold', badgeClass]}
+			class={[
+				'w-12 shrink-0 rounded px-1.5 py-1 text-center font-mono text-xs font-medium',
+				badgeClass
+			]}
 		>
 			{format}
 		</span>
 		<div class="min-w-0 flex-1">
 			<p class="truncate text-sm font-medium" title={item.file.name}>{item.file.name}</p>
-			<p class="text-xs text-slate-500">
+			<p class="text-xs text-muted">
 				{formatSize(item.file.size)}
 				{#if item.document}
 					· распознано пунктов: {item.document.clause_count}
@@ -46,7 +49,7 @@
 		</div>
 		<button
 			type="button"
-			class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+			class="rounded p-1 text-muted hover:bg-neutral-soft hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
 			disabled={item.inFlight || item.busy}
 			aria-label={`Удалить ${item.file.name}`}
 			onclick={() => session.remove(item)}
@@ -61,10 +64,10 @@
 
 	{#if item.document}
 		<div class="mt-2 flex items-center gap-2">
-			<label for={selectId} class="text-xs text-slate-500">Тип документа</label>
+			<label for={selectId} class="text-xs text-muted">Тип документа</label>
 			<select
 				id={selectId}
-				class="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm disabled:opacity-60"
+				class="min-w-0 flex-1 rounded-md border border-line bg-page px-2 py-1 text-sm disabled:opacity-60"
 				value={item.document.doc_type}
 				disabled={item.busy}
 				onchange={onTypeChange}
@@ -77,21 +80,25 @@
 	{/if}
 
 	{#if item.status === 'uploading'}
-		<progress class="mt-2 h-1.5 w-full" max="1" value={item.progress} aria-label="Загрузка файла"
+		<progress
+			class="mt-2 h-1.5 w-full accent-accent"
+			max="1"
+			value={item.progress}
+			aria-label="Загрузка файла"
 		></progress>
-		<p class="text-xs text-slate-500">Загрузка… {Math.round(item.progress * 100)}%</p>
+		<p class="text-xs text-muted">Загрузка… {Math.round(item.progress * 100)}%</p>
 	{:else if item.status === 'processing'}
-		<progress class="mt-2 h-1.5 w-full" aria-label="Разбор документа"></progress>
-		<p class="text-xs text-slate-500">Разбор документа…</p>
+		<progress class="mt-2 h-1.5 w-full accent-accent" aria-label="Разбор документа"></progress>
+		<p class="text-xs text-muted">Разбор документа…</p>
 	{/if}
 
 	{#if item.error}
-		<div class="mt-2 flex items-start gap-2 text-sm text-red-700" role="alert">
+		<div class="mt-2 flex items-start gap-2 text-sm text-bad" role="alert">
 			<p class="flex-1">{item.error}</p>
 			{#if item.status === 'failed' && item.retriable}
 				<button
 					type="button"
-					class="shrink-0 rounded border border-red-300 px-2 py-0.5 text-xs font-medium hover:bg-red-50"
+					class="shrink-0 rounded border border-bad px-2 py-0.5 text-xs font-medium hover:bg-bad-soft"
 					onclick={() => session.retry(item)}
 				>
 					Повторить

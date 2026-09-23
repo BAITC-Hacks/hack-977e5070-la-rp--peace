@@ -1,1 +1,106 @@
 @import 'tailwindcss';
+
+/*
+ * Design tokens from docs/spec/prototype.html. Light by default; dark follows the system
+ * setting unless <html data-theme="light">, and <html data-theme="dark"> forces it.
+ */
+:root {
+	--page: #f4f6f5;
+	--surface: #ffffff;
+	--ink: #1b2220;
+	--muted: #5b6662;
+	--line: #dce1de;
+	--accent: #1e5a62;
+	--accent-ink: #ffffff;
+	--accent-soft: #e2edee;
+	--ok: #2d7a4b;
+	--ok-soft: #e3f2e8;
+	--bad: #b3261e;
+	--bad-soft: #fbe6e4;
+	--warn: #8f5c00;
+	--warn-soft: #fbefd6;
+	--neutral: #4b5652;
+	--neutral-soft: #e9edeb;
+	--hl: #fff3b8;
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--page: #121716;
+		--surface: #1a2120;
+		--ink: #e5ebe9;
+		--muted: #9aa6a2;
+		--line: #2d3634;
+		--accent: #86c6ce;
+		--accent-ink: #0f1a1b;
+		--accent-soft: #1c3235;
+		--ok: #7ecb98;
+		--ok-soft: #16301f;
+		--bad: #f2a39c;
+		--bad-soft: #3a1b18;
+		--warn: #e6bd6a;
+		--warn-soft: #35290f;
+		--neutral: #b5c0bc;
+		--neutral-soft: #252d2b;
+		--hl: #4a4214;
+		color-scheme: dark;
+	}
+}
+
+:root[data-theme='dark'] {
+	--page: #121716;
+	--surface: #1a2120;
+	--ink: #e5ebe9;
+	--muted: #9aa6a2;
+	--line: #2d3634;
+	--accent: #86c6ce;
+	--accent-ink: #0f1a1b;
+	--accent-soft: #1c3235;
+	--ok: #7ecb98;
+	--ok-soft: #16301f;
+	--bad: #f2a39c;
+	--bad-soft: #3a1b18;
+	--warn: #e6bd6a;
+	--warn-soft: #35290f;
+	--neutral: #b5c0bc;
+	--neutral-soft: #252d2b;
+	--hl: #4a4214;
+	color-scheme: dark;
+}
+
+/* `inline` makes utilities read the variables above, so a theme switch needs no rebuild. */
+@theme inline {
+	--color-page: var(--page);
+	--color-surface: var(--surface);
+	--color-ink: var(--ink);
+	--color-muted: var(--muted);
+	--color-line: var(--line);
+	--color-accent: var(--accent);
+	--color-accent-ink: var(--accent-ink);
+	--color-accent-soft: var(--accent-soft);
+	--color-ok: var(--ok);
+	--color-ok-soft: var(--ok-soft);
+	--color-bad: var(--bad);
+	--color-bad-soft: var(--bad-soft);
+	--color-warn: var(--warn);
+	--color-warn-soft: var(--warn-soft);
+	--color-neutral: var(--neutral);
+	--color-neutral-soft: var(--neutral-soft);
+	--color-hl: var(--hl);
+}
+
+@theme {
+	--font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@layer base {
+	body {
+		@apply bg-page text-[15px]/[1.55] text-ink;
+	}
+
+	:focus-visible {
+		@apply outline-2 outline-offset-2 outline-accent;
+	}
+}
