@@ -1,23 +1,41 @@
 # Git Workflow
 
-Team of three, one hackathon repo, one shared `main`. The goal of this document is that
-nobody ever loses work and nobody spends hackathon time untangling history.
+Team of three, one hackathon repo, one shared `main`, **six hours total**. The goal of
+this document is that nobody ever loses work and nobody spends any of those six hours
+untangling history.
 
-Read this together with [`guidelines.md`](guidelines.md), which defines the commit
-message and branch naming conventions this file assumes.
+At this timescale an hour lost to a broken `main` is a sixth of the event. The rules
+below are deliberately cheap to follow.
 
-## The five rules
+## Related documents
 
-1. **Never force-push `main`.** Not with `--force`, not with `--force-with-lease`.
-2. **Never commit directly on `main`.** Branch, then merge.
-3. **Rebase onto `origin/main` before you open or merge a PR.** Conflicts are yours to
+- **[`guidelines.md`](guidelines.md)** — coding conventions, the ruff/mypy/pytest rule
+  set, and the commit message and branch naming conventions this document assumes.
+  Read it before you write code; read this before you push it.
+
+## The six rules
+
+1. **Pull before you do anything. Then keep pulling.** Before starting a task, before
+   creating a branch, before pushing, and roughly **every 20–30 minutes** while you
+   work. A conflict caught 10 minutes after it appears is a one-line fix; the same
+   conflict caught three hours later is a merge from hell.
+
+   ```bash
+   git pull                # on main; rebases, see setup below
+   git fetch origin        # on a branch; then rebase when convenient
+   ```
+
+2. **Never force-push `main`.** Not with `--force`, not with `--force-with-lease`.
+3. **Never commit directly on `main`.** Branch, then merge.
+4. **Rebase onto `origin/main` before you open or merge a PR.** Conflicts are yours to
    resolve on your branch, not everyone's to discover on `main`.
-4. **Push at least once an hour.** Unpushed work is invisible to the other two, and
-   invisible work is work that gets duplicated.
-5. **One task, one branch, one day maximum.** Long-lived branches are what make
-   conflicts hard.
+5. **Push every 20–30 minutes.** Unpushed work is invisible to the other two, and
+   invisible work is work that gets duplicated. At six hours you cannot afford to
+   build the same thing twice.
+6. **One task, one branch, one hour maximum.** If a branch has been alive longer than
+   an hour, it is too big — merge what works and branch again for the rest.
 
-## Why rule 1 exists
+## Why rule 2 exists
 
 This already happened here. `main` was force-pushed early on: commit `7019dbb`
 ("Add LABUBU heading to README") was rewritten into `1ce34ca`. Anyone who had already
@@ -44,9 +62,10 @@ whether it is safe to delete. `feat/lead-scoring` answers both questions instant
 
 Delete your branch after it merges. GitHub offers a button for this; use it.
 
-## Daily loop
+## The loop
 
-Set this once per clone so pulls never create surprise merge commits:
+Set this once per clone, so every pull rebases instead of creating surprise merge
+commits:
 
 ```bash
 git config pull.rebase true
@@ -55,7 +74,7 @@ git config pull.rebase true
 Then, per task:
 
 ```bash
-# 1. Start from current main
+# 1. PULL FIRST -- always, before anything else
 git checkout main
 git pull                       # rebases, per the config above
 
@@ -68,25 +87,34 @@ uv run ruff check --fix .
 git add <specific files>       # never `git add -A`
 git commit -m "feat: add lead scoring endpoint"
 
-# 4. Before pushing, catch up with main
+# 4. Every 20-30 min: pull main's new work into your branch
 git fetch origin
 git rebase origin/main         # resolve conflicts here, on your own branch
 
-# 5. Push and open a PR
+# 5. Push -- also every 20-30 min, not just when finished
 git push -u origin feat/short-description
-gh pr create --fill
+
+# 6. Open the PR as soon as the branch exists, even if unfinished
+gh pr create --fill --draft    # drop --draft when ready for review
 ```
 
-Rebasing **your own unmerged branch** is safe and expected — that is not what rule 1
-forbids. Rule 1 is about `main` and any branch someone else has based work on.
+Steps 4 and 5 are not "end of task" steps. Run them on a timer. Opening the PR early
+(step 6) is free and lets the other two see what you are building before it lands.
+
+Rebasing **your own unmerged branch** is safe and expected — that is not what rule 2
+forbids. Rule 2 is about `main` and any branch someone else has based work on.
 
 ## Reviews
 
-Three people, so: **one approval merges.** Do not wait for both others.
+Three people and six hours, so keep review cheap:
 
-Keep PRs small enough to review in five minutes. A PR that touches 40 files will not get
-a real review during a hackathon — it will get a rubber stamp, which is worse than no
-review at all.
+- **One approval merges.** Do not wait for both others.
+- **Ten-minute review SLA.** If nobody has reviewed within ten minutes, merge it
+  anyway and say so in chat. At this timescale a stalled PR costs the team more than
+  an unreviewed one.
+- **Keep PRs small enough to review in five minutes.** A PR touching 40 files will not
+  get a real review during a hackathon — it will get a rubber stamp, which is worse
+  than no review at all.
 
 Squash-merge so `main` stays one commit per logical change:
 
@@ -96,6 +124,20 @@ gh pr merge --squash --delete-branch
 
 The squash commit message must still follow Conventional Commits.
 
+## The last 45 minutes
+
+Freeze. From then on:
+
+- **Bug fixes only.** No refactors, no new dependencies, no renames.
+- **Merge or abandon** every open branch — nothing half-merged at the deadline.
+- **Pull and verify on a clean clone** before you call it done:
+
+  ```bash
+  git clone <repo> /tmp/final-check && cd /tmp/final-check
+  uv sync && uv run ruff check . && uv run pytest
+  ```
+
+  "It works on my machine" has lost more hackathons than bad code.
 ## Staying out of each other's way
 
 Most conflicts are an organisational problem, not a git problem.
@@ -157,5 +199,6 @@ Before you merge to `main`:
 - [ ] `uv run mypy .` passes *(will pass once the first module exists)*
 - [ ] `uv run pytest` passes *(will pass once the first test exists)*
 - [ ] Commit messages follow Conventional Commits
-- [ ] One teammate approved
+- [ ] Code follows [`guidelines.md`](guidelines.md)
+- [ ] One teammate approved, or the ten-minute SLA elapsed
 - [ ] Branch deleted after merge
