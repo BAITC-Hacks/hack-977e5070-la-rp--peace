@@ -59,7 +59,9 @@ standard lib → third-party → local.
 - `import logging` — use `structlog` instead
 
 **Git:** Conventional Commits — `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`. Branch
-naming: `feat/feature-name`, `fix/bug-description`.
+naming: `feat/feature-name`, `fix/bug-description`, `chore/tooling-change`,
+`docs/what-changed`. Branch and merge via PR — never commit directly on `main`, and
+never force-push it. See [`git-workflow.md`](git-workflow.md) for the full team process.
 
 **Logging:** Use `structlog` (not stdlib `logging`). Always bind relevant context:
 
