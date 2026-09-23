@@ -4,9 +4,11 @@
 *«ИИ-агент „Анализ организационной структуры и функционала“»* (docx in the repo root).
 
 **Scope and priorities come from [`docs/spec/tz_site.md`](../docs/spec/tz_site.md)** (§6 pages,
-§8 P0–P3), and the look and behaviour of «Изменения → Визуал» from
-[`docs/spec/visual_compare.html`](../docs/spec/visual_compare.html). Where §2, §4 and §5 below
-disagree with them, see the open conflicts in [`docs/spec/README.md`](../docs/spec/README.md).
+§8 P0–P3). The look and behaviour of the whole site come from
+[`docs/spec/prototype.html`](../docs/spec/prototype.html), and of the «Изменения → Визуал»
+screen from [`docs/spec/visual_compare.html`](../docs/spec/visual_compare.html). Where §2, §4
+and §5 below disagree with them, see the open conflicts in
+[`docs/spec/README.md`](../docs/spec/README.md).
 
 The task explicitly requires, as a deliverable, *"an interface for uploading documents and
 viewing results"* (§10). Every must-have finding (§7) has to be visible and traceable to its
