@@ -87,7 +87,11 @@
 				/>
 			</label>
 		</p>
-		<p class="text-xs text-muted">Word, PDF или Excel: {ACCEPTED_EXTENSIONS.join(', ')}</p>
+		<p class="text-xs text-muted">
+			{single
+				? 'Word, PDF или Excel. Штатное расписание — внутри документа.'
+				: `Word, PDF или Excel: ${ACCEPTED_EXTENSIONS.join(', ')}`}
+		</p>
 	</div>
 {/snippet}
 
@@ -118,8 +122,9 @@
 		{@render picker()}
 	{/if}
 
+	<!-- File names can be one long word; wrap them anywhere rather than widen a phone screen. -->
 	{#if message}
-		<p class="text-sm text-bad" role="alert">{message}</p>
+		<p class="text-sm wrap-anywhere text-bad" role="alert">{message}</p>
 	{/if}
 	{#if refused && !accepting}
 		<p class="text-sm text-bad" role="alert">

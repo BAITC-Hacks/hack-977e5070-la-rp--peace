@@ -45,7 +45,7 @@
 					</span>
 					<span class="text-sm font-medium">{issueTypeLabel(issue.issue_type)}</span>
 					{#if anchor}
-						<span class="font-mono text-xs text-muted">{anchor}</span>
+						<span class="min-w-0 font-mono text-xs wrap-anywhere text-muted">{anchor}</span>
 					{/if}
 					{#if nodeId !== null && onreveal}
 						<button
@@ -58,7 +58,7 @@
 						</button>
 					{/if}
 				</div>
-				<p class="mt-1 text-sm break-words">{issue.message}</p>
+				<p class="mt-1 text-sm wrap-anywhere">{issue.message}</p>
 			</li>
 		{/each}
 	</ul>

@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './print.css';
 
 /*
  * Design tokens from docs/spec/prototype.html. Light by default; dark follows the system

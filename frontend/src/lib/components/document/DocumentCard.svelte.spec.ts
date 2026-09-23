@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
+
+import '../../../routes/layout.css';
 
 import type { DocumentCardValues } from '$lib/api/document';
 
@@ -66,6 +69,18 @@ function row(container: HTMLElement, name: string): HTMLElement {
 	return element;
 }
 
+const LONG_WORD =
+	'Положение_о_департаменте_информационной_безопасности_и_рисков_редакция_2025_года';
+
+/** A 360 px phone screen: the page column is a grid, so it grows with unbreakable content. */
+async function phoneFrame(): Promise<HTMLElement> {
+	await page.viewport(360, 800);
+	const frame = document.createElement('div');
+	frame.style.cssText = 'display: grid; width: 360px; padding-inline: 16px; box-sizing: border-box';
+	document.body.append(frame);
+	return frame;
+}
+
 describe('DocumentCard', () => {
 	it('shows accepted values with the quotes that support them', async () => {
 		const screen = await render(DocumentCard, { card: CARD, evidence: EVIDENCE });
@@ -113,5 +128,24 @@ describe('DocumentCard', () => {
 
 		await expect.element(screen.getByText('Реквизиты не извлечены.')).toBeVisible();
 		await expect.element(screen.getByText('Название')).not.toBeInTheDocument();
+	});
+
+	it('wraps long values, quotes and reasons within a phone screen', async () => {
+		const frame = await phoneFrame();
+		const screen = await render(DocumentCard, {
+			target: frame,
+			props: {
+				card: { ...EMPTY_CARD, title: LONG_WORD },
+				evidence: {
+					title: { status: 'extracted', value: LONG_WORD, quotes: [quote(LONG_WORD)] },
+					organization: { status: 'ambiguous', value: LONG_WORD, quotes: [], reason: LONG_WORD },
+					effective_from: { status: 'not_found', value: null, quotes: [], reason: LONG_WORD }
+				}
+			}
+		});
+
+		await expect.element(screen.getByText(`«${LONG_WORD}»`)).toBeVisible();
+		expect(frame.scrollWidth).toBeLessThanOrEqual(frame.clientWidth);
+		frame.remove();
 	});
 });

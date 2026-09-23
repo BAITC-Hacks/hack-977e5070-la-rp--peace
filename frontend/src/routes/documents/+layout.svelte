@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { compareQuery } from '$lib/diff/anchor';
 	import { SET_LABELS } from '$lib/source/label';
 	import { uploadSession } from '$lib/upload/current';
-	import { parsedDocuments } from '$lib/upload/parsed';
+	import { comparePair, parsedDocuments } from '$lib/upload/parsed';
 
 	import type { LayoutProps } from './$types';
 
@@ -11,6 +12,8 @@
 
 	/** The documents of the analysis being prepared; empty after a reload, as the list is in memory. */
 	const documents = $derived(parsedDocuments(uploadSession.items));
+	/** «До» and «После» for the Word view, once both are parsed. */
+	const pair = $derived(comparePair(documents));
 </script>
 
 {#if documents.length > 1}
@@ -24,6 +27,14 @@
 				{SET_LABELS[doc.set]} · {doc.name}
 			</a>
 		{/each}
+		{#if pair !== null}
+			<a
+				href={resolve(`/compare${compareQuery(pair.before, pair.after)}`)}
+				class="rounded-md border border-accent px-3 py-1.5 text-[0.9rem] text-accent hover:bg-accent-soft"
+			>
+				Сравнить редакции
+			</a>
+		{/if}
 	</nav>
 {/if}
 

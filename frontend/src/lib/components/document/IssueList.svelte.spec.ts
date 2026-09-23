@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
+
+import '../../../routes/layout.css';
 
 import type { IssueOut, NodeOut } from '$lib/api/document';
 import { TreeState } from '$lib/document/tree-state.svelte';
@@ -57,6 +60,18 @@ const NODES = [
 	node(31, 3, 0, '3.1 Служба подчиняется Совету директоров.'),
 	node(32, 3, 1, '3.4 Служба проводит аудит системы защиты информации.')
 ];
+
+const LONG_WORD =
+	'Положение_о_департаменте_информационной_безопасности_и_рисков_редакция_2025_года';
+
+/** A 360 px phone screen: the page column is a grid, so it grows with unbreakable content. */
+async function phoneFrame(): Promise<HTMLElement> {
+	await page.viewport(360, 800);
+	const frame = document.createElement('div');
+	frame.style.cssText = 'display: grid; width: 360px; padding-inline: 16px; box-sizing: border-box';
+	document.body.append(frame);
+	return frame;
+}
 
 describe('IssueList', () => {
 	it('lists blocking issues first, each with its type and message', async () => {
@@ -123,5 +138,22 @@ describe('IssueList', () => {
 		await expect.element(item).toHaveFocus();
 		const section = treeScreen.container.querySelector('[data-node-id="3"]');
 		expect(section?.getAttribute('aria-expanded')).toBe('true');
+	});
+
+	it('wraps a long message and place within a phone screen', async () => {
+		const frame = await phoneFrame();
+		const place = 'after:dibr:2.8.8.8.8.8.8.8.8.8.1';
+		const screen = await render(IssueList, {
+			target: frame,
+			props: {
+				issues: [issue(1, 5, true, 'numbering_gap', `После п. 2.8 идёт ${LONG_WORD}`)],
+				anchors: new Map([[5, place]]),
+				onreveal: () => {}
+			}
+		});
+
+		await expect.element(screen.getByText(place)).toBeVisible();
+		expect(frame.scrollWidth).toBeLessThanOrEqual(frame.clientWidth);
+		frame.remove();
 	});
 });

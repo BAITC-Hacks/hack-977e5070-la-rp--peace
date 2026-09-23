@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 
 import { STAGES, type DocumentProgress, type StageState } from '$lib/status/stages';
 
 import ProcessingStatus from './ProcessingStatus.svelte';
+
+// Tailwind utilities, so that the layout checks see the real widths.
+import '../../../routes/layout.css';
 
 const before = 'До: Положение_2024.docx';
 const after = 'После: Положение_2025.pdf';
@@ -126,6 +130,21 @@ describe('ProcessingStatus', () => {
 		expect(ondone).not.toHaveBeenCalled();
 		vi.advanceTimersByTime(1);
 		expect(ondone).toHaveBeenCalledOnce();
+	});
+
+	it('keeps the stage columns in view next to a long unbroken file name', async () => {
+		await page.viewport(1024, 800);
+		const long = `До: ${'Положение_о_внутреннем_аудите_редакция_8_'.repeat(3)}итоговая.docx`;
+		const screen = await render(ProcessingStatus, {
+			rows: [row(long, ['failed', 'waiting', 'waiting'], 'Сервер недоступен.')],
+			ondone: vi.fn()
+		});
+
+		const table = screen.getByRole('table').element();
+		const wrapper = table.parentElement as HTMLElement;
+		expect(table.scrollWidth).toBeLessThanOrEqual(wrapper.clientWidth);
+		const alert = screen.getByRole('alert').element();
+		expect(alert.scrollWidth).toBeLessThanOrEqual(alert.clientWidth);
 	});
 
 	it('cancels the call when the screen goes away', async () => {

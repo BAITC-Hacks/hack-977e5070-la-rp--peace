@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+
 	import { splitContext } from '$lib/source/highlight';
 	import { SET_LABELS } from '$lib/source/label';
 	import { formatLocation } from '$lib/source/location';
@@ -155,14 +157,24 @@
 					</blockquote>
 				</section>
 
-				<a
-					class="self-start rounded-md border border-line px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent-soft"
-					href={panel.downloadUrl}
-					rel="external"
-					download={source.document_name}
-				>
-					Скачать оригинал
-				</a>
+				<div class="flex flex-wrap gap-2">
+					{#if panel.compareHref}
+						<a
+							class="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent-soft"
+							href={resolve(panel.compareHref)}
+						>
+							Показать в сравнении
+						</a>
+					{/if}
+					<a
+						class="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent-soft"
+						href={panel.downloadUrl}
+						rel="external"
+						download={source.document_name}
+					>
+						Скачать оригинал
+					</a>
+				</div>
 			{/if}
 		</div>
 	{/if}

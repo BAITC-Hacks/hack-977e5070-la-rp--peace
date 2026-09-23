@@ -4,7 +4,7 @@ import { render } from 'vitest-browser-svelte';
 
 import { ApiError } from '$lib/api/errors';
 import type { SourceRef, SourcesApi } from '$lib/api/sources';
-import { SourcePanelState, type SourceTarget } from '$lib/source/panel.svelte';
+import { type ComparePair, SourcePanelState, type SourceTarget } from '$lib/source/panel.svelte';
 
 import SourceChip from './SourceChip.svelte';
 import SourcePanel from './SourcePanel.svelte';
@@ -52,8 +52,8 @@ function fakeApi(overrides: Partial<SourcesApi> = {}): SourcesApi {
 	};
 }
 
-async function renderPanel(api: SourcesApi) {
-	const panel = new SourcePanelState(api);
+async function renderPanel(api: SourcesApi, compare: ComparePair | null = null) {
+	const panel = new SourcePanelState(api, () => compare);
 	await render(SourcePanel, { props: { panel } });
 	await render(SourceChip, {
 		props: { panel, targets, index: 0, set: 'before', anchor: 'п. 2.5' }
@@ -142,6 +142,41 @@ describe('SourcePanel', () => {
 		expect(dialogElement().querySelector('mark')).toBeNull();
 		await expect
 			.element(page.getByRole('link', { name: 'Скачать оригинал' }))
+			.not.toBeInTheDocument();
+	});
+
+	it('links a source of the compared documents to the Word view at its node', async () => {
+		await renderPanel(fakeApi(), { before: 1, after: 2 });
+
+		await page.getByRole('button', { name: 'До · п. 2.5' }).click();
+
+		const link = page.getByRole('link', { name: 'Показать в сравнении' });
+		await expect.element(link).toHaveAttribute('href', '/compare?before=1&after=2#node-11');
+
+		await page.getByRole('button', { name: 'Следующий источник' }).click();
+
+		await expect.element(link).toHaveAttribute('href', '/compare?before=1&after=2#node-22');
+	});
+
+	it('does not link to the Word view without a pair of documents', async () => {
+		await renderPanel(fakeApi());
+
+		await page.getByRole('button', { name: 'До · п. 2.5' }).click();
+
+		await expect.element(page.getByRole('link', { name: 'Скачать оригинал' })).toBeVisible();
+		await expect
+			.element(page.getByRole('link', { name: 'Показать в сравнении' }))
+			.not.toBeInTheDocument();
+	});
+
+	it('does not link to the Word view for a document outside the pair', async () => {
+		await renderPanel(fakeApi(), { before: 5, after: 2 });
+
+		await page.getByRole('button', { name: 'До · п. 2.5' }).click();
+
+		await expect.element(page.getByRole('link', { name: 'Скачать оригинал' })).toBeVisible();
+		await expect
+			.element(page.getByRole('link', { name: 'Показать в сравнении' }))
 			.not.toBeInTheDocument();
 	});
 });

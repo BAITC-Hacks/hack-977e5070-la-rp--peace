@@ -27,7 +27,17 @@
 	class="grid gap-2.5 rounded-lg border border-line bg-surface px-4 py-3.5"
 	aria-labelledby={headingId}
 >
-	<h2 id={headingId} class="font-semibold">Сводка изменений</h2>
+	<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+		<h2 id={headingId} class="font-semibold">Сводка изменений</h2>
+		<button
+			type="button"
+			data-print="hide"
+			class="ml-auto rounded-md border border-line bg-page px-2.5 py-1 text-[13px] font-medium text-accent hover:border-accent"
+			onclick={() => window.print()}
+		>
+			Скачать PDF
+		</button>
+	</div>
 
 	{#if parts.length > 0}
 		<p class="max-w-[80ch]">

@@ -3,6 +3,7 @@ import { render } from 'vitest-browser-svelte';
 
 import fixture from '$lib/fixtures/result.json';
 import { visibleFindings } from '$lib/result/derive';
+import { ReviewState } from '$lib/result/review.svelte';
 import type { JobResult } from '$lib/result/types';
 
 import ChangesView from './ChangesView.svelte';
@@ -11,18 +12,24 @@ import ChangesView from './ChangesView.svelte';
 const result = fixture as JobResult;
 const loss = result.findings['C-011'];
 
+function setup() {
+	const review = new ReviewState(visibleFindings(result));
+	return { screen: render(ChangesView, { result, review }), review };
+}
+
 describe('ChangesView on the demo fixture', () => {
-	it('shows the summary and every block of the comparison', async () => {
-		const screen = render(ChangesView, { result });
+	it('shows the summary, the full analytics and every block of the comparison', async () => {
+		const { screen } = setup();
 
 		await expect.element(screen.getByRole('heading', { name: 'Сводка изменений' })).toBeVisible();
+		await expect.element(screen.getByText('Показать полную аналитику')).toBeVisible();
 		for (const block of result.blocks) {
 			await expect.element(screen.getByRole('heading', { name: block.title })).toBeVisible();
 		}
 	});
 
 	it('opens a finding from the conclusion, counts its verdict and closes from a quote', async () => {
-		const screen = render(ChangesView, { result });
+		const { screen, review } = setup();
 		const total = visibleFindings(result).length;
 
 		await screen.getByRole('button', { name: 'C-011', exact: true }).click();
@@ -36,6 +43,7 @@ describe('ChangesView on the demo fixture', () => {
 		await expect
 			.element(screen.getByText(`Проверено сотрудником: 1 из ${total}`))
 			.toBeInTheDocument();
+		expect(review.verdictOf('C-011')).toBe('ok');
 
 		await dialog
 			.getByRole('button', { name: /^Документ «/ })
