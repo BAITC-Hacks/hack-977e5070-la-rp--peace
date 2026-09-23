@@ -252,7 +252,27 @@ class ParsingQueue:
             )
         for document_id in pending:
             self.submit(document_id)
-        return len(pending)
+        return len(pending) + self._resume_chains()
+
+    def _resume_chains(self) -> int:
+        """Re-run chains a previous run left unfinished, from their first unfinished stage."""
+        resumed = 0
+        with self._session_factory() as session:
+            documents = list(
+                session.scalars(
+                    select(Document).where(Document.parse_status.not_in([ParseStatus.PENDING.value, "failed"]))
+                )
+            )
+            for document in documents:
+                for stage in self._stages:
+                    state = getattr(document, f"{stage.name}_status", None)
+                    if state == "failed":
+                        break
+                    if state in ("running", "not_started"):
+                        self.submit_from(document.id, stage.name)
+                        resumed += 1
+                        break
+        return resumed
 
     def shutdown(self) -> None:
         """Stop accepting work and wait for running jobs."""

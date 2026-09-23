@@ -1,6 +1,7 @@
 """Stage 5.2 over HTTP: start a before -> after comparison and read its JobResult."""
 
 import json
+import threading
 from functools import partial
 from typing import Any
 
@@ -47,7 +48,7 @@ def _out(row: Comparison) -> ComparisonOut:
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED, response_model=ComparisonOut)
 def start_comparison(request: Request, session: SessionDep, settings: SettingsDep, body: ComparisonIn) -> ComparisonOut:
-    """Queue a comparison; poll GET /{id} until status is done / needs_review / failed."""
+    """Start a comparison once both sides are analysed; poll GET /{id} until status is done / needs_review / failed."""
     queue = request.app.state.parsing_queue
     embedder = request.app.state.embedder
     model = request.app.state.chat_model
@@ -62,7 +63,9 @@ def start_comparison(request: Request, session: SessionDep, settings: SettingsDe
     session.add(row)
     session.commit()
     factory = request.app.state.session_factory
-    queue.submit_call(partial(comparison_job, factory, row.id, model, embedder, settings.analysis_retries))
+    # Own thread, not the parsing workers: the job waits for the documents' chains on those workers.
+    job = partial(comparison_job, factory, row.id, model, embedder, settings.analysis_retries)
+    threading.Thread(target=job, name=f"comparison-{row.id}", daemon=True).start()
     return _out(row)
 
 

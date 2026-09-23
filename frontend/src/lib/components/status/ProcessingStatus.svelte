@@ -100,7 +100,7 @@
 	{#if status === 'done'}
 		<p role="status" {@attach openResultsLater}>
 			<strong class="font-semibold">Готово.</strong>
-			<span class="text-muted">Открываю структуру документов…</span>
+			<span class="text-muted">Запускаю анализ…</span>
 		</p>
 	{/if}
 </div>
