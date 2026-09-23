@@ -77,7 +77,7 @@
 				<p class="text-xs font-medium tracking-[0.07em] text-muted uppercase">
 					{doc.set ? `Документ ${DOC_SET_LABELS[doc.set]}` : 'Документ'}
 				</p>
-				<h1 class="text-2xl font-semibold break-words">{doc.file_name}</h1>
+				<h1 class="text-2xl font-semibold wrap-anywhere">{doc.file_name}</h1>
 				<p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
 					<span
 						class={['rounded px-2 py-0.5 text-xs font-semibold', STATUS_CLASSES[doc.parse_status]]}

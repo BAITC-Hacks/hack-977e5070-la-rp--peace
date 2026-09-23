@@ -119,7 +119,7 @@
 	{/if}
 
 	{#if message}
-		<p class="text-sm text-bad" role="alert">{message}</p>
+		<p class="text-sm wrap-anywhere text-bad" role="alert">{message}</p>
 	{/if}
 	{#if refused && !accepting}
 		<p class="text-sm text-bad" role="alert">
