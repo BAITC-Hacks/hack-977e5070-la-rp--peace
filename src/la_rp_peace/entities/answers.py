@@ -9,10 +9,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from la_rp_peace.enums import ParentStatus, RelationType
+from la_rp_peace.enums import EntityCategory, ParentStatus, RelationType
 
 SUPPORT_NAME = "name"
 SUPPORT_TYPE = "type"
+SUPPORT_CATEGORY = "category"
 SUPPORT_PARENT = "parent"
 SUPPORT_POSITION_TYPE = "position_type"
 SUPPORT_LEVEL = "level"
@@ -57,6 +58,7 @@ class MentionIn(_Strict):
     name: str = Field(min_length=1)
     aliases: list[str] = []
     type: str = Field(min_length=1)
+    category: EntityCategory
     position_type: str | None = None
     level: str | None = None
     roles: list[RoleIn] = []

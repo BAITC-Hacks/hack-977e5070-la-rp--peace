@@ -99,6 +99,7 @@ class _Writer:
         row.name = entity.name
         row.aliases = json.dumps(entity.aliases, ensure_ascii=False)
         row.entity_type = entity.entity_type
+        row.category = entity.category.value
         row.position_type = entity.position_type
         row.level = entity.level
         row.roles = json.dumps(entity.roles, ensure_ascii=False)

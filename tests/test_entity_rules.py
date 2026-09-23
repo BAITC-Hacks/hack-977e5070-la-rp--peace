@@ -45,7 +45,7 @@ def _ditaad(ref: str = "d") -> dict[str, Any]:
         ref,
         "Департамент ИТ-аудита и анализа данных",
         "департамент",
-        [src(2, "Департамент ИТ-аудита и анализа данных (ДИТААД)", "name", "type")],
+        [src(2, "Департамент ИТ-аудита и анализа данных (ДИТААД)", "name", "type", "category")],
         aliases=["ДИТААД"],
     )
 
@@ -55,7 +55,7 @@ def _doa(ref: str = "o") -> dict[str, Any]:
         ref,
         "Департамент операционного аудита",
         "департамент",
-        [src(3, "Департамент операционного аудита", "name", "type")],
+        [src(3, "Департамент операционного аудита", "name", "type", "category")],
     )
 
 
@@ -64,7 +64,7 @@ def _auditor(ref: str, parent: str, node: int = 5, intro: int = 4) -> dict[str, 
         ref,
         "Аудитор",
         "должность",
-        [src(node, "Аудитор", "name", "type")],
+        [src(node, "Аудитор", "name", "type", "category")],
         resolved(parent, src(intro, "в составе следующих должностей", "parent")),
     )
 
@@ -88,7 +88,7 @@ class Replies:
 def test_invented_quote_is_fed_back_and_corrected() -> None:
     invented = {
         "block_status": "found",
-        "mentions": [mention("d", "ДИТААД", "департамент", [src(2, "Дирекция ИТ", "name", "type")])],
+        "mentions": [mention("d", "ДИТААД", "департамент", [src(2, "Дирекция ИТ", "name", "type", "category")])],
     }
     model = Replies(invented, {"block_status": "found", "mentions": [_ditaad()]})
     registry = _registry()
@@ -102,7 +102,7 @@ def test_invented_quote_is_fed_back_and_corrected() -> None:
 
 
 def test_node_of_another_document_is_rejected() -> None:
-    answer = _answer(mention("d", "ДИТААД", "департамент", [src(999, "ДИТААД", "name", "type")]))
+    answer = _answer(mention("d", "ДИТААД", "департамент", [src(999, "ДИТААД", "name", "type", "category")]))
 
     errors = check_block_answer(answer, SourceVerifier(TEXTS), set())
 
@@ -140,7 +140,9 @@ def test_parent_needs_a_parent_source_and_known_ref() -> None:
 
 
 def test_unknown_supports_value_and_registry_key_are_rejected() -> None:
-    answer = _answer(mention("E4", "ДИТААД", "департамент", [src(2, "ДИТААД", "name", "type", "headcount")]))
+    answer = _answer(
+        mention("E4", "ДИТААД", "департамент", [src(2, "ДИТААД", "name", "type", "category", "headcount")])
+    )
 
     errors = check_block_answer(answer, SourceVerifier(TEXTS), {"E1"})
 
@@ -184,7 +186,7 @@ def test_equal_names_without_registry_key_stay_separate() -> None:
 def test_registry_key_adds_sources_to_the_same_entity() -> None:
     registry = _registry()
     registry.apply_block(_answer(_ditaad()))
-    again = mention("E1", "ДИТААД", "департамент", [src(4, "ДИТААД", "name", "type")])
+    again = mention("E1", "ДИТААД", "департамент", [src(4, "ДИТААД", "name", "type", "category")])
     registry.apply_block(_answer(again))
 
     assert list(registry.entities) == ["E1"]
@@ -247,7 +249,7 @@ def test_unmarked_block_blocks_the_document() -> None:
 
 def test_relation_is_kept_apart_from_parent() -> None:
     registry = _registry()
-    director = mention("dir", "Директор ДИТААД", "должность", [src(4, "Директору ДИТААД", "name", "type")])
+    director = mention("dir", "Директор ДИТААД", "должность", [src(4, "Директору ДИТААД", "name", "type", "category")])
     reports = relation("a", "dir", "reports_to", src(4, "Директору ДИТААД подчиняются", "relation"))
     registry.apply_block(_answer(_ditaad(), director, _auditor("a", "d"), relations=[reports]))
 
@@ -260,7 +262,7 @@ def test_relation_is_kept_apart_from_parent() -> None:
 
 def _split_names() -> Registry:
     registry = _registry()
-    abbreviation = mention("s", "ДИТААД", "департамент", [src(4, "ДИТААД", "name", "type")])
+    abbreviation = mention("s", "ДИТААД", "департамент", [src(4, "ДИТААД", "name", "type", "category")])
     registry.apply_block(_answer(abbreviation, _auditor("a", "s")))
     registry.apply_block(_answer(_ditaad()))
     return registry

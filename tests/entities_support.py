@@ -27,6 +27,13 @@ _NODE_LINE = re.compile(r"^\[node (\d+)\] (?:\(контекст\) )?(.*?) \| (.*
 _REGISTRY_LINE = re.compile(r"^(E\d+): (.+?)(?: \(также: .*?\))? — ")
 
 Answer = dict[str, Any]
+CATEGORY_BY_TYPE = {
+    "блок": "block",
+    "департамент": "department",
+    "должность": "position",
+    "орган управления": "governing_body",
+    "группа работников": "collective",
+}
 
 
 @dataclass
@@ -76,11 +83,12 @@ def mention(
     parent: dict[str, Any] | None = None,
     **extra: Any,
 ) -> Answer:
-    """One mention of an answer; the parent defaults to unknown."""
+    """One mention of an answer; the parent defaults to unknown, the category follows the type."""
     return {
         "ref": ref,
         "name": name,
         "type": entity_type,
+        "category": extra.pop("category", CATEGORY_BY_TYPE[entity_type]),
         "sources": sources,
         "parent": parent or {"status": "unknown"},
         **extra,
@@ -156,17 +164,22 @@ def ed9_general(view: View) -> Answer | None:
                 "n1",
                 "Блок внутреннего аудита",
                 "блок",
-                [src(intro, "Блока внутреннего аудита Общества (далее - БВА)", "name", "type")],
+                [src(intro, "Блока внутреннего аудита Общества (далее - БВА)", "name", "type", "category")],
                 aliases=["БВА"],
             ),
             mention(
                 "n2",
                 "Главный аудитор",
                 "должность",
-                [src(head, "Главный аудитор", "name", "type")],
+                [src(head, "Главный аудитор", "name", "type", "category")],
                 resolved("n1", src(head, "Руководство БВА осуществляет Главный аудитор", "parent")),
             ),
-            mention("n3", "Совет директоров", "орган управления", [src(board, "Совета директоров", "name", "type")]),
+            mention(
+                "n3",
+                "Совет директоров",
+                "орган управления",
+                [src(board, "Совета директоров", "name", "type", "category")],
+            ),
         ],
         "relations": [
             relation(
@@ -187,7 +200,7 @@ def _ed9_staff(view: View, clause: str, unit: str, director: str) -> list[Answer
             f"a_{unit}",
             "Аудитор",
             "должность",
-            [src(auditor, "Аудитор", "name", "type")],
+            [src(auditor, "Аудитор", "name", "type", "category")],
             resolved(unit, src(intro, f"работники {unit} в соответствии со штатным расписанием", "parent")),
         ),
         relation(f"a_{unit}", director, "reports_to", src(intro, f"Директору {unit} подчиняются", "relation")),
@@ -210,8 +223,14 @@ def ed9_structure(view: View) -> Answer | None:
             bva,
             "Блок внутреннего аудита",
             "блок",
-            [src(listing, "БВА", "name", "type")],
+            [src(listing, "БВА", "name", "type", "category")],
             aliases=["БВА"],
+        ),
+        mention(
+            "workers",
+            "работники БВА",
+            "группа работников",
+            [src(subordinates, "работники БВА", "name", "type", "category")],
         ),
     ]
     relations = []
@@ -223,7 +242,7 @@ def ed9_structure(view: View) -> Answer | None:
                 abbreviation,
                 name,
                 "департамент",
-                [src(item, f"{name} ({abbreviation})", "name", "type")],
+                [src(item, f"{name} ({abbreviation})", "name", "type", "category")],
                 resolved(bva, in_bva),
                 aliases=[abbreviation],
             ),
@@ -231,7 +250,15 @@ def ed9_structure(view: View) -> Answer | None:
                 director,
                 f"Директор {abbreviation}",
                 "должность",
-                [src(view.node(f"{prefix[:2]} Директор {abbreviation}"), f"Директор {abbreviation}", "name", "type")],
+                [
+                    src(
+                        view.node(f"{prefix[:2]} Директор {abbreviation}"),
+                        f"Директор {abbreviation}",
+                        "name",
+                        "type",
+                        "category",
+                    )
+                ],
                 resolved(abbreviation, src(view.node(f"{prefix[:2]} Директор {abbreviation}"), abbreviation, "parent")),
             ),
         ]
@@ -262,6 +289,7 @@ def ed8_structure(view: View) -> Answer | None:
                         "Департамент контроля качества аудита и методологии (ДККМ)",
                         "name",
                         "type",
+                        "category",
                     )
                 ],
                 aliases=["ДККМ"],
@@ -276,6 +304,7 @@ def ed8_structure(view: View) -> Answer | None:
                         "Директор направления внутреннего аудита",
                         "name",
                         "type",
+                        "category",
                     )
                 ],
             ),
@@ -283,7 +312,7 @@ def ed8_structure(view: View) -> Answer | None:
                 "dp",
                 "Директор проектов ДККМ",
                 "должность",
-                [src(node, "Директор проектов ДККМ", "name", "type") for node in listed],
+                [src(node, "Директор проектов ДККМ", "name", "type", "category") for node in listed],
                 resolved("dkkm", src(staff, "работники ДККМ в соответствии со штатным расписанием", "parent")),
             ),
         ],

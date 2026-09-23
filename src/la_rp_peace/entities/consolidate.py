@@ -24,7 +24,7 @@ _MAX_LISTED_ERRORS = 5
 
 def _entity_review(registry: Registry, entity: RegisteredEntity) -> list[str]:
     aliases = f" (также: {'; '.join(entity.aliases)})" if entity.aliases else ""
-    attributes = [f"тип: {entity.entity_type}"]
+    attributes = [f"тип: {entity.entity_type}", f"категория: {entity.category}"]
     attributes += [f"тип позиции: {entity.position_type}"] if entity.position_type else []
     attributes += [f"уровень: {entity.level}"] if entity.level else []
     attributes += [f"роль: {role['role']}" + (f" ({role['scope']})" if role["scope"] else "") for role in entity.roles]
@@ -77,11 +77,12 @@ def consolidate(
     if not registry.entities:
         return
     keys = set(registry.entities)
+    categories = {key: entity.category for key, entity in registry.entities.items()}
     outcome = converse(
         model,
         consolidation_messages(card, registry_review(registry), cited_nodes(registry, places, node_texts)),
         ConsolidationAnswer,
-        lambda answer: check_consolidation(answer, registry.verifier, keys),
+        lambda answer: check_consolidation(answer, registry.verifier, keys, categories),
         retries,
     )
     if outcome.answer is None:

@@ -26,8 +26,8 @@ from la_rp_peace.entities.previous import (
     normalise,
     same_identity,
 )
-from la_rp_peace.entities.verify import REGISTRY_KEY, SourceVerifier, VerifiedSource
-from la_rp_peace.enums import EntityIssueType, ParentStatus, RelationType
+from la_rp_peace.entities.verify import REGISTRY_KEY, SourceVerifier, VerifiedSource, categories_compatible
+from la_rp_peace.enums import EntityCategory, EntityIssueType, ParentStatus, RelationType
 
 _PARENT_WORDS = {
     ParentStatus.ROOT: "корневой объект",
@@ -50,6 +50,7 @@ class RegisteredEntity:
     key: str
     name: str
     entity_type: str
+    category: EntityCategory = EntityCategory.UNCLEAR
     aliases: list[str] = field(default_factory=list)
     position_type: str | None = None
     level: str | None = None
@@ -161,7 +162,9 @@ class Registry:
         for entity in self.entities.values():
             aliases = f" (также: {'; '.join(entity.aliases)})" if entity.aliases else ""
             parent = self.parent_text(entity)
-            lines.append(f"{entity.key}: {entity.name}{aliases} — {entity.entity_type}; родитель: {parent}")
+            lines.append(
+                f"{entity.key}: {entity.name}{aliases} — {entity.entity_type} [{entity.category}]; родитель: {parent}"
+            )
         return "\n".join(lines) or "(пока пусто)"
 
     def has_parent_source(self, key: str) -> bool:
@@ -234,13 +237,24 @@ class Registry:
         role_sources = [s for role in mention.roles for s in self._sources(role.sources, f"{key} роль")]
         entity = self.entities.get(key)
         if entity is None:
-            entity = RegisteredEntity(key, mention.name, mention.type)
+            entity = RegisteredEntity(key, mention.name, mention.type, mention.category)
             self.entities[key] = entity
+        self._reconcile_category(entity, mention.category)
         _add_unique(entity.aliases, [mention.name, *mention.aliases], entity.name)
         entity.position_type = entity.position_type or mention.position_type
         entity.level = entity.level or mention.level
         entity.roles += [role for role in roles if role not in entity.roles]
         entity.evidence += [item for item in sources + role_sources if item not in entity.evidence]
+
+    def _reconcile_category(self, entity: RegisteredEntity, category: EntityCategory) -> None:
+        """An unclear category is settled by a later mention; a conflicting one keeps the first and is noted."""
+        if category == entity.category or category is EntityCategory.UNCLEAR:
+            return
+        if entity.category is EntityCategory.UNCLEAR:
+            entity.category = category
+            return
+        message = f"{entity.key}: категория {entity.category} противоречит упоминанию ({category}); оставлена первая"
+        self.add_issue(RegistryIssue(EntityIssueType.OTHER, message, False, entity.key))
 
     def _note_unclear(self, unclear: list[UnclearIn], resolve: dict[str, str]) -> None:
         for item in unclear:
@@ -303,11 +317,20 @@ class Registry:
         """Apply a whole-document review that passed ``check_consolidation``: merges, then parents."""
         for merge in answer.merges:
             keep, gone = self.canonical(merge.keep), self.canonical(merge.merge)
-            if keep != gone:
+            if keep != gone and self._can_merge(keep, gone):
                 self._merge(keep, gone, self._sources(merge.sources, "объединение"))
         for update in answer.parent_updates:
             self._update_parent(update)
         self._note_unclear(answer.unresolved, {})
+
+    def _can_merge(self, keep: str, merge: str) -> bool:
+        """Objects of different categories are never merged, unless one category is unclear."""
+        first, second = self.entities[keep].category, self.entities[merge].category
+        if categories_compatible(first, second):
+            return True
+        message = f"Объединение {merge} с {keep} отклонено: разные категории ({second} и {first})"
+        self.add_issue(RegistryIssue(EntityIssueType.AMBIGUOUS_MERGE, message, False, keep))
+        return False
 
     def _update_parent(self, update: ParentUpdateIn) -> None:
         entity = self.entities[self.canonical(update.entity)]
@@ -333,6 +356,7 @@ class Registry:
         kept.roles += [role for role in gone.roles if role not in kept.roles]
         kept.position_type = kept.position_type or gone.position_type
         kept.level = kept.level or gone.level
+        kept.category = gone.category if kept.category is EntityCategory.UNCLEAR else kept.category
         for entity in self.entities.values():
             self._repoint(entity, merge, keep)
         self._drop_ambiguity(merge)
@@ -384,7 +408,7 @@ class Registry:
 
     def _matches(self, entity: RegisteredEntity, previous: PreviousEntity) -> bool:
         names = {normalise(value) for value in [entity.name, *entity.aliases]}
-        return same_identity(names, entity.entity_type, self._parent_previous_id(entity), previous)
+        return same_identity(names, entity.category, self._parent_previous_id(entity), previous)
 
     def _reverify(self, sources: list[PreviousSource], block: int, owner: str) -> list[Evidence]:
         """Check stored sources of the block against the current node texts; drop stale ones with an issue."""
@@ -409,9 +433,10 @@ class Registry:
             key = candidates[0].key if len(candidates) == 1 else None
         if key is None:
             key = self._new_key()
-            self.entities[key] = RegisteredEntity(key, previous.name, previous.entity_type)
+            self.entities[key] = RegisteredEntity(key, previous.name, previous.entity_type, previous.category)
         entity = self.entities[key]
         entity.previous_id = previous.id
+        self._reconcile_category(entity, previous.category)
         _add_unique(entity.aliases, [previous.name, *previous.aliases], entity.name)
         entity.position_type = entity.position_type or previous.position_type
         entity.level = entity.level or previous.level

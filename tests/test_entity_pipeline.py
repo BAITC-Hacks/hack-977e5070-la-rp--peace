@@ -160,7 +160,7 @@ def test_rerun_replaces_previous_results(factory: sessionmaker[Session]) -> None
         count = len(list(session.scalars(select(Entity).where(Entity.document_id == document_id))))
         marks = len(list(session.scalars(select(EntityBlock).where(EntityBlock.document_id == document_id))))
 
-    assert count == 9
+    assert count == 10
     assert marks == len([c for c in model.stage2_conversations() if c[0].content == BLOCK_SYSTEM_PROMPT]) // 2
 
 

@@ -94,7 +94,11 @@ goes `not_started → running → done | needs_review | failed`. Each document i
 2. Blocks are read in order. The model sees the card, the registry so far (`E<n>: name …`)
    and the block, and answers mentions (`E<n>` = known object, other refs = new), parents
    with status, relations (functional subordination, reports_to, … — never the parent) and
-   unclear cases. Every claim needs a source `{node_id, quote, supports}`; quotes must be
+   unclear cases. Each mention has `type` (the document's wording) and a normalised `category`
+   (organization, governing_body, block, department, division, group, position, collective,
+   other, unclear — rules in `entities/prompt.py`; later stages compare objects of one category;
+   a category conflict keeps the first with an issue, merges across categories are refused,
+   `unclear` needs review). Every claim needs a source `{node_id, quote, supports}`; quotes must be
    verbatim in a node of this document. Problems go back to the model; after
    `ENTITY_RETRIES` or on a request error the block is `failed` (never `none`) + blocking issue.
 3. A whole-document review merges duplicates only with a `same_entity` source and settles
@@ -109,7 +113,7 @@ goes `not_started → running → done | needs_review | failed`. Each document i
    confirmed by other blocks stay. A block that fails keeps its previous contribution (sources
    re-checked against the current node texts; stale ones dropped with an issue) and is marked
    `failed` + blocking issue. Unchanged objects keep their `entities.id` (unique match on
-   name/alias + type + parent; rows updated in place), relations keep ids by ends + type;
+   name/alias + category + parent; rows updated in place), relations keep ids by ends + type;
    objects no longer found are deleted. A crash (`failed` status) leaves the stored result as is.
 
 ## Traceability contract (every conclusion -> exact words)
@@ -148,7 +152,7 @@ Endpoints: `POST/GET /api/documents`, `GET/PATCH/DELETE /api/documents/{id}`,
 
 ### 1b. Organisational entities (stage 2) — **done**
 
-`GET /api/documents/{id}/entities` (parent, status, candidates, aliases, roles, review status,
+`GET /api/documents/{id}/entities` (parent, status, candidates, aliases, `entity_type`, `category`, roles, review status,
 sources `{node_id, path, location, quote, start, end, supports}`),
 `GET /api/documents/{id}/entity-relations`, `GET /api/documents/{id}/entity-report` (block marks,
 issues, `entities_status`), `POST /api/documents/{id}/entities` → 202, re-runs stage 2 and the

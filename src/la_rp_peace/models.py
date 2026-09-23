@@ -109,6 +109,7 @@ class Entity(Base):
     name: Mapped[str] = mapped_column(Text)
     aliases: Mapped[str] = mapped_column(Text, default="[]")
     entity_type: Mapped[str] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(Text, default="unclear")
     position_type: Mapped[str | None] = mapped_column(Text)
     level: Mapped[str | None] = mapped_column(Text)
     roles: Mapped[str] = mapped_column(Text, default="[]")

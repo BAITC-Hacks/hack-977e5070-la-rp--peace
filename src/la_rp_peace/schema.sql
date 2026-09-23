@@ -166,6 +166,12 @@ CREATE TABLE entities (
         CASE WHEN json_valid(aliases) THEN json_type(aliases) = 'array' ELSE 0 END
     ),
     entity_type TEXT NOT NULL CHECK (trim(entity_type) <> ''),
+    -- Normalised category (entity_type keeps the document's wording); later stages compare
+    -- objects of one category. 'unclear' is flagged for review.
+    category TEXT NOT NULL DEFAULT 'unclear' CHECK (category IN (
+        'organization', 'governing_body', 'block', 'department', 'division', 'group', 'position',
+        'collective', 'other', 'unclear'
+    )),
     position_type TEXT,
     level TEXT,
     -- JSON array of {role, scope}; every role is backed by an entity_sources row.

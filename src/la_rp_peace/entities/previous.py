@@ -4,7 +4,7 @@ A re-run replaces each block's previous contribution with its new, verified answ
 previous run stored is still needed for two things: a block that fails in the re-run keeps
 its previous contribution (a failed attempt never overwrites a result), and unchanged objects
 keep their ids so that later-stage records referencing ``entities.id`` stay valid. Identity
-is decided conservatively: a shared name or alias, the same type, the same parent — and the
+is decided conservatively: a shared name or alias, the same category, the same parent — and the
 match must be unique in both directions, otherwise the object gets a new id.
 """
 
@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from la_rp_peace.enums import ParentStatus, RelationType
+from la_rp_peace.enums import EntityCategory, ParentStatus, RelationType
 from la_rp_peace.models import Entity, EntityRelation, EntitySource
 
 
@@ -36,6 +36,7 @@ class PreviousEntity:
     name: str
     aliases: list[str]
     entity_type: str
+    category: EntityCategory
     position_type: str | None
     level: str | None
     roles: list[dict[str, str | None]]
@@ -82,16 +83,16 @@ def normalise(value: str) -> str:
     return " ".join(value.split()).casefold()
 
 
-def same_identity(names: set[str], entity_type: str, parent_id: int | None, previous: PreviousEntity) -> bool:
-    """Tell whether an entity of this run may be the stored one: shared name, same type and parent.
+def same_identity(names: set[str], category: EntityCategory, parent_id: int | None, previous: PreviousEntity) -> bool:
+    """Tell whether an entity of this run may be the stored one: shared name, same category and parent.
 
     Args:
         names: Normalised name and aliases of the entity.
-        entity_type: Its type.
+        category: Its category (the normalised category, not the free-text type, decides).
         parent_id: Previous id of its parent (None without a parent, or a parent new in this run).
         previous: The stored entity.
     """
-    same_type = normalise(entity_type) == normalise(previous.entity_type)
+    same_type = category == previous.category
     return same_type and parent_id == previous.parent_id and bool(names & previous.names())
 
 
@@ -116,6 +117,7 @@ def load_previous(session: Session, document_id: int) -> PreviousResult:
             name=row.name,
             aliases=json.loads(row.aliases),
             entity_type=row.entity_type,
+            category=EntityCategory(row.category),
             position_type=row.position_type,
             level=row.level,
             roles=json.loads(row.roles),

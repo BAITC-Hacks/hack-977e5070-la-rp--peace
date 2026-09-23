@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from la_rp_peace.entities.answers import (
     ROLE_SUPPORT_PREFIX,
+    SUPPORT_CATEGORY,
     SUPPORT_LEVEL,
     SUPPORT_NAME,
     SUPPORT_PARENT,
@@ -25,14 +26,17 @@ from la_rp_peace.entities.answers import (
     SourceIn,
     UnclearIn,
 )
-from la_rp_peace.enums import ParentStatus
+from la_rp_peace.enums import EntityCategory, ParentStatus
 from la_rp_peace.quotes import find_quote
 
 REGISTRY_KEY = re.compile(r"^E\d+$")
+# Categories that state no fact about the object, so they need no source.
+UNSOURCED = frozenset({EntityCategory.UNCLEAR, EntityCategory.OTHER})
 PLAIN_SUPPORTS = frozenset(
     {
         SUPPORT_NAME,
         SUPPORT_TYPE,
+        SUPPORT_CATEGORY,
         SUPPORT_PARENT,
         SUPPORT_POSITION_TYPE,
         SUPPORT_LEVEL,
@@ -138,7 +142,7 @@ def _check_mention(mention: MentionIn, scope: _RefScope, verifier: SourceVerifie
     owner = f"{mention.ref} «{mention.name}»"
     if REGISTRY_KEY.match(mention.ref) and mention.ref not in scope.registry_keys:
         errors.append(f"{owner}: объекта {mention.ref} нет в реестре документа")
-    required = [(SUPPORT_NAME, True), (SUPPORT_TYPE, True)]
+    required = [(SUPPORT_NAME, True), (SUPPORT_TYPE, True), (SUPPORT_CATEGORY, mention.category not in UNSOURCED)]
     required += [(SUPPORT_POSITION_TYPE, mention.position_type is not None), (SUPPORT_LEVEL, mention.level is not None)]
     for claim, needed in required:
         if needed and not _supported(mention.sources, claim):
@@ -206,19 +210,35 @@ def check_block_answer(answer: BlockAnswer, verifier: SourceVerifier, registry_k
     return errors
 
 
-def check_consolidation(answer: ConsolidationAnswer, verifier: SourceVerifier, registry_keys: set[str]) -> list[str]:
+def categories_compatible(first: EntityCategory, second: EntityCategory) -> bool:
+    """Two entries can be one object only in one category, unless one of them is unclear."""
+    return first == second or EntityCategory.UNCLEAR in (first, second)
+
+
+def check_consolidation(
+    answer: ConsolidationAnswer,
+    verifier: SourceVerifier,
+    registry_keys: set[str],
+    categories: dict[str, EntityCategory] | None = None,
+) -> list[str]:
     """Check the whole-document review answer against the registry and the text.
 
     Args:
         answer: Parsed answer.
         verifier: Quote resolver of the current document.
         registry_keys: Keys of the registered entities.
+        categories: Category of each registered entity; merges across categories are refused.
 
     Returns:
         Problems for the model; empty if the answer can be applied.
     """
     errors: list[str] = []
     scope = _RefScope(registry_keys, set())
+    known = categories or {}
+    for merge in answer.merges:
+        pair = known.get(merge.keep), known.get(merge.merge)
+        if pair[0] is not None and pair[1] is not None and not categories_compatible(pair[0], pair[1]):
+            errors.append(f"объединение {merge.merge}→{merge.keep}: разные категории {pair[1]} и {pair[0]}")
     merged = [merge.merge for merge in answer.merges]
     if len(merged) != len(set(merged)):
         errors.append("один объект нельзя объединять с несколькими объектами")

@@ -55,6 +55,8 @@ def test_upload_chains_stage_2_and_exposes_entities(client: TestClient) -> None:
     by_id = {entity["id"]: entity for entity in entities}
     auditors = [entity for entity in entities if entity["name"] == "Аудитор"]
     assert [by_id[auditor["parent_id"]]["aliases"] for auditor in auditors] == [["ДИТААД"], ["ДОА"]]
+    assert [auditor["category"] for auditor in auditors] == ["position", "position"]
+    assert {by_id[auditor["parent_id"]]["category"] for auditor in auditors} == {"department"}
     parent_source = next(source for source in auditors[0]["sources"] if source["supports"] == ["parent"])
     assert parent_source["path"] == "Разд. 3 «Структура и организация работы внутреннего аудита» › п. 3.6"
     assert parent_source["location"] == {"paragraph": 112}

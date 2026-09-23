@@ -77,6 +77,21 @@ class ParentStatus(StrEnum):
     AMBIGUOUS = "ambiguous"
 
 
+class EntityCategory(StrEnum):
+    """Normalised category of an organisational object; later stages compare objects of one category."""
+
+    ORGANIZATION = "organization"
+    GOVERNING_BODY = "governing_body"
+    BLOCK = "block"
+    DEPARTMENT = "department"
+    DIVISION = "division"
+    GROUP = "group"
+    POSITION = "position"
+    COLLECTIVE = "collective"
+    OTHER = "other"
+    UNCLEAR = "unclear"
+
+
 class ReviewStatus(StrEnum):
     """Review state of an entity."""
 

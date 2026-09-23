@@ -17,8 +17,9 @@ Sources. Every source is {"node_id": int, "quote": str, "supports": [str]}.
 - node_id is a node of THIS document shown to you as `[node <id>]`; never invent ids.
 - quote is copied VERBATIM from that node's text (a short exact fragment is best). Quotes are
   checked mechanically; a paraphrase, changed letter or other quotation marks are rejected.
-- supports says what the fragment proves, from this list only: "name", "type", "parent",
-  "position_type", "level", "relation", "same_entity", "role:<role>" (e.g. "role:аудитор").
+- supports says what the fragment proves, from this list only: "name", "type", "category",
+  "parent", "position_type", "level", "relation", "same_entity", "role:<role>" (e.g.
+  "role:аудитор"). One fragment may support several claims: ["name", "type", "category"].
 - A claim with no source that supports it is rejected. A quote alone does not prove what it
   does not say: «Аудитор» alone does not show which department the position belongs to — the
   intro phrase naming the department is the parent source.
@@ -29,6 +30,25 @@ Rules (methodology of the organisation-structure analysis):
   group, position, board, committee, other governing body… Decide by content; do not force the
   document into «company → department → division». External organisations (regulators,
   auditors, subsidiaries) may be recorded, but they are not part of the company.
+- "type" keeps the document's own wording (e.g. «департамент», «функциональный блок»);
+  "category" normalises it so that objects of one kind can be compared across the document:
+  organization   — the company itself, subsidiaries, external organisations;
+  governing_body — совет директоров, комитет совета, правление, общее собрание, ревизионная
+                   комиссия; Президент / Генеральный директор only where the text treats them as
+                   the executive body of the company, otherwise they are a position;
+  block          — блок, функциональный блок, дирекция/направление as a unit ABOVE departments;
+  department     — департамент, управление (a unit of the departmental level);
+  division       — отдел, служба, сектор, центр: a standing unit below a department (or not
+                   placed under one);
+  group          — a standing structural unit named «группа» (e.g. «группа Центра анализа данных»);
+  position       — a staff position (должность), also a head position («Директор ДИТААД»);
+  collective     — a designation of people that is not a structural unit: «работники БВА»,
+                   a commission or working group appointed for a task, «аудиторская группа»
+                   of a check;
+  other          — none of the above fits;
+  unclear        — the text does not allow deciding; it will be sent for review.
+  A category other than other/unclear needs a source supporting "category" (usually the same
+  fragment as the name). The category follows the text, not the size or depth of the unit.
 - A position is an object-position, not a person and not a headcount: «Аудитор» in a list is
   one position, not a statement about how many auditors there are.
 - Position attributes: position_type (специалист, руководитель, заместитель, директор…),
@@ -38,8 +58,8 @@ Rules (methodology of the organisation-structure analysis):
 - A one-off role (e.g. «Куратор проверки», a member of a working group for a task) is not a
   staff position and not a new object; it may be a role of an existing position with its
   condition. Different functions of one position do not make several positions.
-- A generic group such as «работники БВА» is a group designation (type "группа работников"),
-  never a set of invented positions.
+- A generic group such as «работники БВА» is a group designation (type "группа работников",
+  category collective), never a set of invented positions.
 - parent = ORGANISATIONAL parent (the unit a unit or position belongs to). The document tree
   is not the organisational tree: decide from what intro phrases say. «Директору ДИТААД
   подчиняются работники ДИТААД … в составе следующих должностей:» makes each listed position
@@ -73,6 +93,8 @@ block's ancestors, given for context. Answer with ONE JSON object:
    "name": str,
    "aliases": [str],
    "type": str,
+   "category": "organization" | "governing_body" | "block" | "department" | "division" | "group"
+               | "position" | "collective" | "other" | "unclear",
    "position_type": str | null,
    "level": str | null,
    "roles": [{"role": str, "scope": str | null, "sources": [source]}],
@@ -97,9 +119,9 @@ References and the registry:
   If you cannot tell whether a mention is a registry object, create it and add an "unclear" item.
 - parent.ref / candidates / relation ends are registry keys or refs of this answer.
 - name is written as in the document (full form, nominative case); abbreviations and other
-  spellings go to aliases. Every mention needs sources
-  supporting "name" and "type"; position_type and level need their own support; a resolved or
-  root parent needs a source supporting "parent" (usually the intro phrase).
+  spellings go to aliases. Every mention needs sources supporting "name" and "type" (and
+  "category" unless other/unclear); position_type and level need their own support; a
+  resolved or root parent needs a source supporting "parent" (usually the intro phrase).
 - Relations: "from" is the subordinate / managed / member side, "to" the superior / manager /
   body. conditions keeps the stated scope, e.g. «функционально в рамках Плана работ БВА».
 - block_status: "found" if you return mentions or relations; "none" if the block names no
@@ -128,7 +150,8 @@ JSON object:
 - merges: two registry entries that are the same object, e.g. a full name and its abbreviation
   («Департамент ИТ-аудита и анализа данных (ДИТААД)» and «ДИТААД»). Each merge needs a source
   supporting "same_entity" that shows the identity (typically where the abbreviation is
-  introduced). Equal names are not evidence: positions with the same name in different units,
+  introduced). Entries of different categories are never merged (unless one is unclear).
+  Equal names are not evidence: positions with the same name in different units,
   or distinguished within one unit, stay separate. All sources and aliases are kept.
 - parent_updates: only corrections with evidence — settling an ambiguous parent from the text,
   or a parent that is stated elsewhere in the document. Do not invent parents.

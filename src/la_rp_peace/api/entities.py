@@ -18,6 +18,7 @@ from la_rp_peace.api.deps import SessionDep
 from la_rp_peace.enums import (
     BlockStatus,
     EntitiesStatus,
+    EntityCategory,
     EntityIssueType,
     ParentStatus,
     RelationType,
@@ -69,6 +70,7 @@ class EntityOut(BaseModel):
     name: str
     aliases: list[str]
     entity_type: str
+    category: EntityCategory
     position_type: str | None
     level: str | None
     roles: list[RoleOut]
@@ -176,6 +178,7 @@ def list_entities(session: SessionDep, document_id: int) -> list[EntityOut]:
             name=row.name,
             aliases=json.loads(row.aliases),
             entity_type=row.entity_type,
+            category=EntityCategory(row.category),
             position_type=row.position_type,
             level=row.level,
             roles=[RoleOut.model_validate(role) for role in json.loads(row.roles)],

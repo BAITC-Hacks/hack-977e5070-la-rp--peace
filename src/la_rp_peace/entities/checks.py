@@ -11,12 +11,25 @@ blocking or any block failed. Passing these checks is not a human confirmation.
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from la_rp_peace.entities.answers import SUPPORT_LEVEL, SUPPORT_NAME, SUPPORT_POSITION_TYPE, SUPPORT_RELATION
+from la_rp_peace.entities.answers import (
+    SUPPORT_CATEGORY,
+    SUPPORT_LEVEL,
+    SUPPORT_NAME,
+    SUPPORT_POSITION_TYPE,
+    SUPPORT_RELATION,
+)
 from la_rp_peace.entities.blocks import Block
 from la_rp_peace.entities.extract import BlockMark, block_path
 from la_rp_peace.entities.registry import RegisteredEntity, Registry, RegistryIssue
-from la_rp_peace.entities.verify import VerifiedSource, role_support
-from la_rp_peace.enums import BlockStatus, EntitiesStatus, EntityIssueType, ParentStatus, ReviewStatus
+from la_rp_peace.entities.verify import UNSOURCED, VerifiedSource, role_support
+from la_rp_peace.enums import (
+    BlockStatus,
+    EntitiesStatus,
+    EntityCategory,
+    EntityIssueType,
+    ParentStatus,
+    ReviewStatus,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +95,18 @@ def _check_attributes(registry: Registry, key: str, entity: RegisteredEntity) ->
     if len(kept) != len(entity.roles):
         _issue(registry, EntityIssueType.UNSUPPORTED_ATTRIBUTE, f"{key}: роли без источника сняты", False, key)
         entity.roles = kept
+    _check_category(registry, key, entity)
     _check_parent_source(registry, key, entity)
+
+
+def _check_category(registry: Registry, key: str, entity: RegisteredEntity) -> None:
+    """A stated category keeps a source; an unclear one is left for the responsible employee."""
+    if entity.category not in UNSOURCED and not _supports(entity.sources, SUPPORT_CATEGORY):
+        _issue(registry, EntityIssueType.UNSUPPORTED_ATTRIBUTE, f"{key}: категория без источника снята", False, key)
+        entity.category = EntityCategory.UNCLEAR
+    if entity.category is EntityCategory.UNCLEAR:
+        message = f"{key} «{entity.name}»: категория объекта не установлена"
+        _issue(registry, EntityIssueType.OTHER, message, False, key)
 
 
 def _check_relations(registry: Registry) -> None:
