@@ -10,9 +10,49 @@ CREATE TABLE documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     file_name TEXT NOT NULL CHECK (trim(file_name) <> ''),
     source_format TEXT NOT NULL CHECK (trim(source_format) <> ''),
+    file_size_bytes INTEGER NOT NULL CHECK (file_size_bytes >= 0),
+    content_sha256 TEXT NOT NULL CHECK (
+        length(content_sha256) = 64 AND content_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    -- Реквизиты из содержания, а не из имени файла или времени загрузки.
+    title TEXT CHECK (title IS NULL OR trim(title) <> ''),
+    document_type TEXT CHECK (document_type IS NULL OR trim(document_type) <> ''),
+    organization TEXT CHECK (organization IS NULL OR trim(organization) <> ''),
     revision TEXT CHECK (revision IS NULL OR trim(revision) <> ''),
-    original_text TEXT NOT NULL
-        CHECK (length(original_text) > 0 AND instr(original_text, char(0)) = 0),
+    approved_by TEXT CHECK (approved_by IS NULL OR trim(approved_by) <> ''),
+    approval_document_type TEXT CHECK (approval_document_type IS NULL OR trim(approval_document_type) <> ''),
+    approval_number TEXT CHECK (approval_number IS NULL OR trim(approval_number) <> ''),
+    -- Даты документа — YYYY-MM-DD, неизвестные значения — NULL.
+    document_created_on TEXT CHECK (document_created_on IS NULL OR (
+        length(document_created_on) = 10
+        AND document_created_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        AND date(document_created_on, '+0 days') IS NOT NULL
+        AND date(document_created_on, '+0 days') = document_created_on
+    )),
+    approved_on TEXT CHECK (approved_on IS NULL OR (
+        length(approved_on) = 10
+        AND approved_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        AND date(approved_on, '+0 days') IS NOT NULL
+        AND date(approved_on, '+0 days') = approved_on
+    )),
+    effective_from TEXT CHECK (effective_from IS NULL OR (
+        length(effective_from) = 10
+        AND effective_from GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        AND date(effective_from, '+0 days') IS NOT NULL
+        AND date(effective_from, '+0 days') = effective_from
+    )),
+    -- Источники реквизитов, статусы извлечения и альтернативные значения.
+    metadata_evidence TEXT NOT NULL DEFAULT '{}' CHECK (
+        CASE WHEN json_valid(metadata_evidence) THEN json_type(metadata_evidence) = 'object' ELSE 0 END
+    ),
+    -- Встроенные свойства файла (автор, технические даты и т. п.), если доступны.
+    file_metadata TEXT NOT NULL DEFAULT '{}' CHECK (
+        CASE WHEN json_valid(file_metadata) THEN json_type(file_metadata) = 'object' ELSE 0 END
+    ),
+    -- NULL до извлечения текста: файл регистрируется до обработки.
+    original_text TEXT CHECK (
+        original_text IS NULL OR (length(original_text) > 0 AND instr(original_text, char(0)) = 0)
+    ),
     -- JSON-массив {start, end, location}: диапазоны и координаты в исходном файле.
     source_map TEXT NOT NULL DEFAULT '[]' CHECK (
         CASE WHEN json_valid(source_map) THEN json_type(source_map) = 'array' ELSE 0 END
@@ -27,7 +67,10 @@ CREATE TABLE documents (
     ),
     parse_status text NOT NULL DEFAULT 'pending'
         CHECK (parse_status IN ('pending', 'parsed', 'needs_review', 'validated')),
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    -- Время регистрации файла в системе, не дата создания документа.
+    uploaded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    CONSTRAINT documents_parsed_requires_text
+        CHECK (parse_status NOT IN ('parsed', 'validated') OR original_text IS NOT NULL)
 ) STRICT;
 
 CREATE TABLE document_nodes (
