@@ -15,6 +15,7 @@ import numpy as np
 import openai
 from numpy.typing import NDArray
 from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from la_rp_peace.models import EmbeddingCache
@@ -140,18 +141,21 @@ def embed_texts(session: Session, embedder: Embedder, texts: Sequence[str]) -> M
     if missing:
         first_text = dict(zip(hashes, texts, strict=True))
         fresh = embedder.embed([first_text[digest] for digest in missing])
+        rows_to_add = []
         for digest, vector in zip(missing, fresh, strict=True):
             array = np.asarray(vector, dtype=np.float64)
             cached[digest] = array
-            session.add(
-                EmbeddingCache(
-                    model=embedder.model,
-                    text_format=TEXT_FORMAT,
-                    text_sha256=digest,
-                    dimensions=int(array.shape[0]),
-                    vector=array.tobytes(),
-                ),
+            rows_to_add.append(
+                {
+                    "model": embedder.model,
+                    "text_format": TEXT_FORMAT,
+                    "text_sha256": digest,
+                    "dimensions": int(array.shape[0]),
+                    "vector": array.tobytes(),
+                }
             )
+        # Stages running side by side may embed the same text; the first stored vector wins.
+        session.execute(sqlite_insert(EmbeddingCache).values(rows_to_add).on_conflict_do_nothing())
     return np.vstack([cached[digest] for digest in hashes])
 
 
