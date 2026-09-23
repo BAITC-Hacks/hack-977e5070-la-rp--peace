@@ -8,6 +8,7 @@ Read these before doing anything:
 
 | Document | What it covers |
 |---|---|
+| [`docs/spec/`](docs/spec/README.md) | Product spec (`tz_site.md`: features, invariants, P0–P3 priorities) and UI mockup (`visual_compare.html`); README says how to use them |
 | [`.agents/guidelines.md`](.agents/guidelines.md) | Coding conventions, ruff/mypy rule set, validation commands |
 | [`.agents/git-workflow.md`](.agents/git-workflow.md) | Branching, PRs, conflict resolution, six-hour cadence |
 | [`.agents/frontend.md`](.agents/frontend.md) | Frontend scope, UI elements, Svelte stack + Svelte MCP, API contract |

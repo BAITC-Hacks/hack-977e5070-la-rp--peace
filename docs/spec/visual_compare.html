@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сравнение — Визуал</title>
+<style>
+  :root{
+    --bg:#1b1f21; --panel:#222729; --panel-2:#2a3033; --line:#3a4246;
+    --text:#e6ebed; --muted:#98a3a8; --accent:#7cc4c9; --accent-bg:#8fcad0;
+    --kept:#8a9499; --transformed:#e0a44a; --created:#5cc27f; --moved:#6fb7c9;
+    --loss:#e05a5a; --duplication:#b48ae6; --conflict:#ef7a4f; --overlap:#d9c35a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:1500px;margin:0 auto;padding:20px 24px 80px;min-width:1100px}
+
+  .toggle{display:inline-flex;gap:4px;margin-bottom:18px}
+  .toggle button{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer}
+  .toggle button.on{background:var(--accent-bg);color:#10292b;border-color:var(--accent)}
+
+  /* summary */
+  .summary{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:22px}
+  .summary .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 10px;border-radius:999px;background:var(--panel-2)}
+  .chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .linkbtn{background:none;border:0;color:var(--accent);font:inherit;cursor:pointer;padding:0;margin-top:10px}
+  .full{display:none;margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+  .full.open{display:block}
+  .full li{margin:4px 0;color:var(--muted)} .full li b{color:var(--text);font-weight:600}
+
+  .colheads{display:grid;grid-template-columns:1fr minmax(260px,320px) 1fr;gap:56px;margin-bottom:6px}
+  .colheads div{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+
+  h2{font-size:16px;margin:20px 0 10px}
+  .row{position:relative;display:grid;grid-template-columns:1fr minmax(260px,320px) 1fr;gap:56px;align-items:start}
+  .row svg{position:absolute;inset:0;pointer-events:none;z-index:0;overflow:visible}
+  .panel{position:relative;z-index:1;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 8px}
+  .panel.after{border-color:var(--accent)}
+  .item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;transition:opacity .15s,background .15s}
+  .item.hl{background:var(--panel-2)}
+  .item.flash{animation:flash 1.6s ease}
+  @keyframes flash{0%,40%{background:#3e5a5c;box-shadow:0 0 0 2px var(--accent)}100%{background:transparent;box-shadow:none}}
+  .badge{font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .b-kept{background:#343b3e;color:#b9c2c6}
+  .b-transformed{background:#4a3717;color:#f0bd6a}
+  .b-created{background:#1c3d28;color:#7fdb9d}
+  .b-moved{background:#1d3a42;color:#8fd3e3}
+  .b-abolished,.b-loss{background:#4a1f1f;color:#ff8c8c}
+
+  .mid{position:relative;z-index:1;display:flex;flex-direction:column;gap:10px}
+  .card{background:var(--panel-2);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:8px;padding:9px 11px;cursor:pointer;transition:opacity .15s,transform .15s}
+  .card:hover,.card.hl{transform:translateX(2px);border-color:var(--c)}
+  .card .t{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--c)}
+  .card .d{font-size:13px;color:var(--text);margin-top:3px}
+  .card .ev{font-size:12px;color:var(--muted);margin-top:5px}
+  .card.compact{padding:5px 11px}
+  .card.compact .d{display:none}
+  .card .st{font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px}
+  .st.ok{background:#1c3d28;color:#7fdb9d} .st.no{background:#4a1f1f;color:#ff8c8c}
+
+  .focusing .item:not(.hl),.focusing .card:not(.hl){opacity:.35}
+  .focusing path:not(.hl){opacity:.1}
+  path{transition:opacity .15s}
+
+  /* drawer */
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(560px,100%);background:var(--panel);border-left:1px solid var(--line);z-index:11;transform:translateX(100%);transition:transform .22s;overflow-y:auto;padding:22px 24px 40px}
+  .drawer.open{transform:none}
+  .drawer .x{position:absolute;top:14px;right:16px;background:none;border:0;color:var(--muted);font-size:22px;cursor:pointer}
+  .drawer h3{margin:6px 0 4px;font-size:19px}
+  .drawer .type{font-size:13px;font-weight:600;color:var(--c)}
+  .sec{margin-top:18px}
+  .sec h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .step{border-left:2px solid var(--line);padding:2px 0 10px 12px;margin-left:4px}
+  .step .n{font-size:12px;color:var(--muted)}
+  .step.inf .txt::before{content:"рассуждение агента";display:inline-block;font-size:11px;background:#3a3350;color:#cdb8f2;border-radius:4px;padding:0 6px;margin-right:6px}
+  .src{display:block;width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-top:6px;color:var(--text);font:inherit;font-size:13px;cursor:pointer}
+  .src:hover{border-color:var(--accent)}
+  .src .m{font-size:12px;color:var(--muted)}
+  .src .m b{color:var(--accent);font-weight:600}
+  .src q{display:block;font-style:italic;margin-top:3px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td,th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left}
+  th{color:var(--muted);font-weight:600}
+  td.s{text-align:right;font-variant-numeric:tabular-nums}
+  .bar{height:6px;background:var(--panel-2);border-radius:3px;position:relative}
+  .bar span{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--muted)}
+  .conf{display:inline-block;padding:2px 10px;border-radius:999px;font-size:13px;font-weight:600}
+  .conf.high{background:#1c3d28;color:#7fdb9d} .conf.medium{background:#4a3d17;color:#f0d06a} .conf.low{background:#4a1f1f;color:#ff8c8c}
+  .actions{display:flex;gap:8px}
+  .actions button{flex:1;padding:9px;border-radius:6px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font:inherit;cursor:pointer}
+  .actions button.ok:hover,.actions button.ok.on{border-color:var(--created);color:#7fdb9d}
+  .actions button.no:hover,.actions button.no.on{border-color:var(--loss);color:#ff8c8c}
+  .meta{margin-top:18px;font-size:12px;color:var(--muted)}
+  .note{font-size:13px;color:var(--muted)}
+  .placeholder{background:var(--panel);border:1px dashed var(--line);border-radius:8px;padding:40px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toggle">
+    <button id="tWord">Word</button>
+    <button id="tVis" class="on">Визуал</button>
+  </div>
+
+  <div id="word" class="placeholder" hidden>Word-режим: построчное сравнение (отдельный макет)</div>
+
+  <div id="vis">
+    <div class="summary">
+      <div><b>Сводка изменений</b> <span class="note">· демо-данные</span></div>
+      <div class="chips" id="chips"></div>
+      <button class="linkbtn" id="fullBtn">Показать полную аналитику</button>
+      <ol class="full" id="full"></ol>
+    </div>
+
+    <div class="colheads"><div>Документ «до»</div><div>Изменения</div><div>Документ «после»</div></div>
+    <div id="blocks"></div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Доказательная база"></aside>
+
+<script>
+const TYPES = {
+  kept:{label:"Сохранено",c:"var(--kept)"},
+  transformed:{label:"Преобразовано",c:"var(--transformed)"},
+  created:{label:"Создано",c:"var(--created)"},
+  moved:{label:"Перенесено",c:"var(--moved)"},
+  loss:{label:"Потеря функции",c:"var(--loss)"},
+  duplication:{label:"Дублирование",c:"var(--duplication)"},
+  conflict:{label:"Конфликт интересов",c:"var(--conflict)"},
+  overlap:{label:"Пересечение зон",c:"var(--overlap)"}
+};
+const HEX = {kept:"#8a9499",transformed:"#e0a44a",created:"#5cc27f",moved:"#6fb7c9",loss:"#e05a5a",duplication:"#b48ae6",conflict:"#ef7a4f",overlap:"#d9c35a"};
+const BADGE = {kept:"сохранено",transformed:"преобразовано",created:"создано",moved:"перенесено",abolished:"упразднено",loss:"потеряна"};
+
+/* s(doc, block, clause, quote, item) — источник */
+const s = (doc,block,clause,quote,item)=>({doc,block,clause,quote,item});
+
+const DATA = [
+ {title:"Структура",
+  before:[
+   {id:"b_dib",label:"Департамент ИБ",st:"transformed"},
+   {id:"b_rej",label:"Отдел режима",st:"abolished"},
+   {id:"b_hr",label:"Отдел кадров",st:"transformed"},
+   {id:"b_it",label:"Управление IT"},
+   {id:"b_proc",label:"Управление закупок"},
+   {id:"b_sva",label:"Служба внутреннего аудита"}],
+  after:[
+   {id:"a_dibr",label:"Департамент ИБ и режима",st:"transformed"},
+   {id:"a_hr",label:"Департамент по работе с персоналом",st:"transformed"},
+   {id:"a_cct",label:"Центр цифровой трансформации",st:"created"},
+   {id:"a_it",label:"Управление IT",st:"kept"},
+   {id:"a_proc",label:"Управление закупок",st:"kept"},
+   {id:"a_sva",label:"Служба внутреннего аудита",st:"kept"}],
+  changes:[
+   {id:"C-001",type:"transformed",from:["b_dib","b_rej"],to:["a_dibr"],title:"Слияние",
+    desc:"Департамент ИБ и Отдел режима объединены",
+    ev:{conclusion:"Департамент ИБ и Отдел режима объединены в Департамент ИБ и режима.",
+     method:"Сопоставление перечней подразделений «до» и «после» и поиск распорядительного пункта, который называет основание преобразования.",
+     steps:[
+      {t:"В документе «до» два отдельных подразделения.",src:[s("До","Структура","Прил. 1, стр. 2","Департамент информационной безопасности","b_dib"),s("До","Структура","Прил. 1, стр. 5","Отдел режима","b_rej")]},
+      {t:"Распорядительный пункт прямо указывает на слияние.",src:[s("После","Распорядительная часть","п. 1.1","…образовать Департамент ИБ и режима путём слияния Департамента ИБ и Отдела режима…","a_dibr")]}],
+     conf:"high",confNote:"Основание указано в документе явно."}},
+   {id:"C-002",type:"transformed",from:["b_hr"],to:["a_hr"],title:"Преобразование",
+    desc:"Отдел кадров → Департамент по работе с персоналом",
+    ev:{conclusion:"Отдел кадров преобразован в Департамент по работе с персоналом.",
+     method:"Распорядительный пункт о преобразовании.",
+     steps:[{t:"Преобразование указано явно.",src:[s("До","Структура","Прил. 1, стр. 3","Отдел кадров","b_hr"),s("После","Распорядительная часть","п. 1.2","…преобразовать Отдел кадров в Департамент по работе с персоналом…","a_hr")]}],
+     conf:"high",confNote:"Основание указано в документе явно."}},
+   {id:"C-003",type:"created",from:[],to:["a_cct"],title:"Новое подразделение",
+    desc:"Аналога в «до» нет",
+    ev:{conclusion:"Центр цифровой трансформации создан, предшественника в «до» нет.",
+     method:"Подразделение «после» сравнивается со всеми подразделениями «до»; если сходство ниже порога, оно считается созданным.",
+     steps:[{t:"Создание указано в распорядительной части.",src:[s("После","Распорядительная часть","п. 1.3","…создать Центр цифровой трансформации…","a_cct")]}],
+     checked:{scope:"Все 6 подразделений «до»",threshold:.75,cands:[["Управление IT","Прил. 1, стр. 4",.41,"b_it"],["Департамент ИБ","Прил. 1, стр. 2",.18,"b_dib"]]},
+     conf:"high",confNote:"Прямое указание + отсутствие похожих подразделений."}},
+   ...[["b_it","a_it","Управление IT","C-004"],["b_proc","a_proc","Управление закупок","C-005"],["b_sva","a_sva","Служба внутреннего аудита","C-006"]].map(([f,t,n,id])=>(
+    {id,type:"kept",from:[f],to:[t],title:"Без изменений",compact:true,
+     ev:{conclusion:`«${n}» сохранено без изменений.`,method:"Совпадение наименования и отсутствие распорядительных пунктов о преобразовании.",
+      steps:[{t:"Наименование совпадает в обоих документах.",src:[s("До","Структура","Прил. 1",n,f),s("После","Структура","Прил. 1",n,t)]}],conf:"high"}}))
+  ]},
+
+ {title:"ИБ и режим",
+  before:[
+   {id:"f_prot",label:"Меры защиты информации — ДИБ, п. 2.1"},
+   {id:"f_pass",label:"Пропускной режим — Отдел режима, п. 3.8"},
+   {id:"f_audit",label:"Аудит ИБ — СВА, п. 2.5"},
+   {id:"f_mob",label:"Мобподготовка — Отдел режима, п. 3.7",st:"loss"}],
+  after:[
+   {id:"g_prot",label:"Меры защиты информации — ДИБиР, п. 2.2",st:"kept"},
+   {id:"g_pass",label:"Пропускной режим — ДИБиР, п. 2.3",st:"moved"},
+   {id:"g_mon",label:"Мониторинг инцидентов — ДИБиР, п. 2.4",st:"created"},
+   {id:"g_edu",label:"Обучение по ИБ — ДИБиР, п. 2.6",st:"created"},
+   {id:"g_audit",label:"Аудит ИБ — ДИБиР, п. 2.8",st:"moved"}],
+  changes:[
+   {id:"C-007",type:"kept",from:["f_prot"],to:["g_prot"],title:"Сохранено · п. 2.1 → 2.2",compact:true,
+    ev:{conclusion:"Функция сохранена, перешла к правопреемнику (ДИБиР), изменилась нумерация.",method:"Смысловое сравнение формулировок функции.",
+     steps:[{t:"Формулировки совпадают (сходство 0.97).",src:[s("До","Положение ДИБ","п. 2.1","…обеспечивает реализацию мер по защите информации…","f_prot"),s("После","Положение ДИБиР","п. 2.2","…обеспечивает реализацию мер по защите информации…","g_prot")]}],conf:"high"}},
+   {id:"C-008",type:"moved",from:["f_pass"],to:["g_pass"],title:"Перенесено",
+    desc:"Из упразднённого Отдела режима в ДИБиР",
+    ev:{conclusion:"Пропускной режим перешёл из Отдела режима в Департамент ИБ и режима.",method:"Смысловое сравнение формулировок + проверка смены владельца.",
+     steps:[
+      {t:"Функция в «до» у Отдела режима.",src:[s("До","Положение Отдела режима","п. 3.8","…организует пропускной и внутриобъектовый режим…","f_pass")]},
+      {t:"Та же функция в «после» у ДИБиР (сходство 0.94).",src:[s("После","Положение ДИБиР","п. 2.3","…организует пропускной и внутриобъектовый режим…","g_pass")]},
+      {t:"Смена владельца объясняется слиянием подразделений.",src:[s("После","Распорядительная часть","п. 1.1","…путём слияния Департамента ИБ и Отдела режима…","a_dibr")]}],conf:"high"}},
+   {id:"C-009",type:"created",from:[],to:["g_mon","g_edu"],title:"Новые функции",
+    desc:"Мониторинг инцидентов и обучение по ИБ",
+    ev:{conclusion:"В ДИБиР появились две функции, которых не было в «до».",method:"Функции «после» сравниваются со всеми функциями блока «до».",
+     steps:[{t:"Функции есть только в «после».",src:[s("После","Положение ДИБиР","п. 2.4","…осуществляет мониторинг инцидентов информационной безопасности…","g_mon"),s("После","Положение ДИБиР","п. 2.6","…организует обучение работников по вопросам ИБ…","g_edu")]}],
+     checked:{scope:"Все 4 функции блока «до»",threshold:.75,cands:[["Меры защиты информации","п. 2.1",.52,"f_prot"],["Аудит ИБ","п. 2.5",.31,"f_audit"]]},conf:"high"}},
+   {id:"C-010",type:"conflict",from:["f_audit"],to:["g_audit"],also:["g_prot"],title:"Конфликт интересов",
+    desc:"ДИБиР внедряет меры защиты и сам их проверяет",
+    ev:{conclusion:"После реорганизации ДИБиР одновременно реализует меры защиты информации и проводит их аудит, то есть проверяет сам себя.",
+     method:"Правило несовместимости «исполняет — контролирует»: один субъект не должен исполнять функцию и контролировать её исполнение в отношении одного объекта.",
+     steps:[
+      {t:"До реорганизации аудит ИБ проводила независимая Служба внутреннего аудита.",src:[s("До","Положение СВА","п. 2.5","…проводит аудит системы защиты информации…","f_audit")]},
+      {t:"После реорганизации аудит закреплён за ДИБиР.",src:[s("После","Положение ДИБиР","п. 2.8","…проводит аудит системы защиты информации…","g_audit")]},
+      {t:"Этот же ДИБиР реализует меры защиты.",src:[s("После","Положение ДИБиР","п. 2.2","…обеспечивает реализацию мер по защите информации…","g_prot")]},
+      {t:"Объект обеих функций совпадает: система защиты информации. Исполнение и контроль оказались у одного субъекта.",inf:true}],
+     npa:"НПА не загружены: норма о несовместимости не приведена, вывод сделан только по документам.",
+     conf:"high",confNote:"Все факты подтверждены цитатами; вывод о несовместимости — рассуждение агента."}},
+   {id:"C-011",type:"loss",from:["f_mob"],to:[],title:"Потеря функции",
+    desc:"Мобподготовка не закреплена ни за кем",
+    ev:{conclusion:"Функция мобилизационной подготовки не закреплена ни за одним подразделением после реорганизации.",
+     method:"Функция из «до» ищется по смыслу во всех пунктах «после». Если ни одно совпадение не выше порога — потеря.",
+     steps:[
+      {t:"В «до» функция закреплена за Отделом режима.",src:[s("До","Положение Отдела режима","п. 3.7","…организует мобилизационную подготовку и мобилизацию…","f_mob")]},
+      {t:"Отдел режима упразднён путём слияния.",src:[s("После","Распорядительная часть","п. 1.1","…путём слияния Департамента ИБ и Отдела режима…","a_dibr")]},
+      {t:"Функции Отдела режима должны были перейти правопреемнику (ДИБиР), но в его положении (п. 2.1–2.8) этой функции нет.",inf:true}],
+     checked:{scope:"Все 23 пункта документа «после»",threshold:.75,cands:[["Пропускной режим","п. 2.3",.38,"g_pass"],["Мониторинг инцидентов","п. 2.4",.22,"g_mon"],["Меры защиты информации","п. 2.2",.19,"g_prot"]]},
+     conf:"high",confNote:"Ни одно совпадение не приблизилось к порогу."}}
+  ]},
+
+ {title:"IT и цифровизация",
+  before:[{id:"h_str",label:"ИТ-стратегия — Управление IT, п. 4.2"}],
+  after:[
+   {id:"k_str",label:"ИТ-стратегия — Управление IT, п. 4.2",st:"kept"},
+   {id:"k_cct",label:"ИТ-стратегия, цифровизация — ЦЦТ, п. 5.1",st:"created"},
+   {id:"k_chg",label:"Согласование изменений ИС — Управление IT, п. 4.5",st:"created"},
+   {id:"k_dead",label:"Сроки внедрения изменений — ЦЦТ, п. 5.4",st:"created"}],
+  changes:[
+   {id:"C-012",type:"kept",from:["h_str"],to:["k_str"],title:"Без изменений",compact:true,
+    ev:{conclusion:"Функция сохранена за Управлением IT.",method:"Смысловое сравнение формулировок.",
+     steps:[{t:"Формулировки совпадают (сходство 0.99).",src:[s("До","Положение Управления IT","п. 4.2","…разрабатывает ИТ-стратегию организации…","h_str"),s("После","Положение Управления IT","п. 4.2","…разрабатывает ИТ-стратегию организации…","k_str")]}],conf:"high"}},
+   {id:"C-013",type:"duplication",from:[],to:["k_str","k_cct"],title:"Дублирование",
+    desc:"ИТ-стратегия у Управления IT и у ЦЦТ",
+    ev:{conclusion:"Разработка ИТ-стратегии закреплена одновременно за Управлением IT и Центром цифровой трансформации.",
+     method:"Попарное смысловое сравнение функций разных подразделений в «после»; сходство выше порога без разграничения ролей — дублирование.",
+     steps:[
+      {t:"Функция у Управления IT.",src:[s("После","Положение Управления IT","п. 4.2","…разрабатывает ИТ-стратегию организации…","k_str")]},
+      {t:"Функция у ЦЦТ.",src:[s("После","Положение ЦЦТ","п. 5.1","…разрабатывает ИТ-стратегию и стратегию цифровизации…","k_cct")]},
+      {t:"Сходство формулировок 0.88 при пороге 0.75; разграничения ролей в документе нет.",inf:true}],
+     conf:"high"}},
+   {id:"C-014",type:"overlap",from:[],to:["k_chg","k_dead"],title:"Пересечение зон",
+    desc:"Изменения ИС: одно согласует, другое ставит сроки",
+    ev:{conclusion:"Изменения ИС согласует Управление IT, а сроки их внедрения устанавливает ЦЦТ; порядок взаимодействия не определён.",
+     method:"Поиск функций разных подразделений над одним объектом с разными действиями.",
+     steps:[
+      {t:"Управление IT согласовывает изменения.",src:[s("После","Положение Управления IT","п. 4.5","…согласовывает изменения информационных систем…","k_chg")]},
+      {t:"ЦЦТ устанавливает сроки внедрения этих же изменений.",src:[s("После","Положение ЦЦТ","п. 5.4","…устанавливает сроки внедрения изменений…","k_dead")]},
+      {t:"Один объект (изменения ИС) в зоне двух подразделений без указания приоритета. Это может быть согласованным разделением ролей — требуется проверка сотрудником.",inf:true}],
+     conf:"medium",confNote:"Факты подтверждены, но оценка того, мешают ли функции друг другу, — интерпретация."}}
+  ]}
+];
+
+/* ---------- render ---------- */
+const $ = s=>document.querySelector(s);
+const esc = t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const review = {};           // id -> "ok" | "no"
+const allChanges = DATA.flatMap(b=>b.changes);
+const byId = Object.fromEntries(allChanges.map(c=>[c.id,c]));
+
+function itemHTML(it){
+  const b = it.st ? `<span class="badge b-${it.st}">${BADGE[it.st]}</span>` : "";
+  return `<div class="item" id="${it.id}"><span>${esc(it.label)}</span>${b}</div>`;
+}
+function cardHTML(c){
+  const T = TYPES[c.type], n = c.ev.steps.reduce((a,s)=>a+(s.src?s.src.length:0),0);
+  const st = review[c.id] ? `<span class="st ${review[c.id]}">${review[c.id]==="ok"?"✓ подтверждено":"✕ отклонено"}</span>` : "";
+  return `<div class="card${c.compact?" compact":""}" data-id="${c.id}" style="--c:${T.c}">
+    <div class="t"><span>${esc(c.title||T.label)}</span>${st}</div>
+    ${c.desc?`<div class="d">${esc(c.desc)}</div>`:""}
+    ${c.compact?"":`<div class="ev">${c.id} · источников: ${n}</div>`}
+  </div>`;
+}
+function render(){
+  $("#blocks").innerHTML = DATA.map((b,i)=>`
+    <h2>${esc(b.title)}</h2>
+    <div class="row" data-i="${i}">
+      <svg></svg>
+      <div class="panel before">${b.before.map(itemHTML).join("")}</div>
+      <div class="mid">${b.changes.map(cardHTML).join("")}</div>
+      <div class="panel after">${b.after.map(itemHTML).join("")}</div>
+    </div>`).join("");
+  bind(); draw(); renderSummary();
+}
+
+function renderSummary(){
+  const cnt = {};
+  allChanges.forEach(c=>cnt[c.type]=(cnt[c.type]||0)+1);
+  $("#chips").innerHTML = Object.keys(TYPES).filter(k=>cnt[k]).map(k=>
+    `<span class="chip"><i style="background:${HEX[k]}"></i>${TYPES[k].label}: ${cnt[k]}</span>`).join("");
+  $("#full").innerHTML = allChanges.filter(c=>c.type!=="kept").map(c=>
+    `<li><b>${TYPES[c.type].label}.</b> ${esc(c.ev.conclusion)} <span class="note">(${c.id})</span></li>`).join("");
+}
+
+/* ---------- arrows ---------- */
+function markers(){
+  return "<defs>"+Object.entries(HEX).map(([k,h])=>
+    `<marker id="m-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${h}"/></marker>`).join("")+"</defs>";
+}
+function curve(x1,y1,x2,y2){const dx=(x2-x1)/2;return `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`}
+function draw(){
+  document.querySelectorAll(".row").forEach(row=>{
+    const b = DATA[row.dataset.i], R = row.getBoundingClientRect();
+    const L = row.querySelector(".panel.before").getBoundingClientRect();
+    const Rt = row.querySelector(".panel.after").getBoundingClientRect();
+    let out = markers();
+    b.changes.forEach(c=>{
+      const k = row.querySelector(`.card[data-id="${c.id}"]`).getBoundingClientRect();
+      const cy = k.top + k.height/2 - R.top, col = HEX[c.type];
+      const w = c.type==="kept" ? 1.2 : 2;
+      c.from.forEach(id=>{
+        const e=document.getElementById(id).getBoundingClientRect();
+        out += `<path data-c="${c.id}" d="${curve(L.right-R.left, e.top+e.height/2-R.top, k.left-R.left, cy)}" stroke="${col}" stroke-width="${w}" fill="none" opacity=".9"/>`;
+      });
+      c.to.forEach(id=>{
+        const e=document.getElementById(id).getBoundingClientRect();
+        out += `<path data-c="${c.id}" d="${curve(k.right-R.left, cy, Rt.left-R.left-2, e.top+e.height/2-R.top)}" stroke="${col}" stroke-width="${w}" fill="none" marker-end="url(#m-${c.type})"/>`;
+      });
+      (c.also||[]).forEach(id=>{
+        const e=document.getElementById(id).getBoundingClientRect();
+        out += `<path data-c="${c.id}" d="${curve(k.right-R.left, cy, Rt.left-R.left-2, e.top+e.height/2-R.top)}" stroke="${col}" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#m-${c.type})"/>`;
+      });
+      if(c.type==="loss"){
+        const x=k.right-R.left;
+        out += `<path data-c="${c.id}" d="M${x},${cy} L${x+34},${cy}" stroke="${col}" stroke-width="2" stroke-dasharray="3 3"/>`+
+               `<text x="${x+40}" y="${cy+4}" fill="${col}" font-size="13" font-weight="600">∅ не закреплено</text>`;
+      }
+    });
+    const svg=row.querySelector("svg");
+    svg.setAttribute("width",R.width); svg.setAttribute("height",R.height);
+    svg.innerHTML = out;
+  });
+}
+
+/* ---------- hover & click ---------- */
+function related(ids){               // ids of changes -> set of element ids
+  const s=new Set();
+  ids.forEach(id=>{const c=byId[id];[...c.from,...c.to,...(c.also||[])].forEach(x=>s.add(x))});
+  return s;
+}
+function focus(row, changeIds){
+  row.classList.add("focusing");
+  const items=related(changeIds);
+  row.querySelectorAll(".item").forEach(e=>e.classList.toggle("hl",items.has(e.id)));
+  row.querySelectorAll(".card").forEach(e=>e.classList.toggle("hl",changeIds.includes(e.dataset.id)));
+  row.querySelectorAll("path[data-c]").forEach(e=>e.classList.toggle("hl",changeIds.includes(e.dataset.c)));
+}
+function unfocus(row){row.classList.remove("focusing");row.querySelectorAll(".hl").forEach(e=>e.classList.remove("hl"))}
+function bind(){
+  document.querySelectorAll(".row").forEach(row=>{
+    const b=DATA[row.dataset.i];
+    row.querySelectorAll(".card").forEach(el=>{
+      el.onmouseenter=()=>focus(row,[el.dataset.id]);
+      el.onmouseleave=()=>unfocus(row);
+      el.onclick=()=>openEv(el.dataset.id);
+    });
+    row.querySelectorAll(".item").forEach(el=>{
+      const ids=b.changes.filter(c=>[...c.from,...c.to,...(c.also||[])].includes(el.id)).map(c=>c.id);
+      if(!ids.length) return;
+      el.onmouseenter=()=>focus(row,ids);
+      el.onmouseleave=()=>unfocus(row);
+    });
+  });
+}
+
+/* ---------- evidence drawer ---------- */
+function srcHTML(x){
+  return `<button class="src" data-item="${x.item||""}">
+    <div class="m"><b>Документ «${x.doc}»</b> · ${esc(x.block)} · ${esc(x.clause)} — показать в документе</div>
+    <q>${esc(x.quote)}</q></button>`;
+}
+function openEv(id){
+  const c=byId[id], T=TYPES[c.type], e=c.ev;
+  const confL={high:"высокая",medium:"средняя",low:"низкая"}[e.conf];
+  $("#drawer").style.setProperty("--c",T.c);
+  $("#drawer").innerHTML = `
+    <button class="x" id="close" aria-label="Закрыть">×</button>
+    <div class="type">${T.label} · ${c.id}</div>
+    <h3>${esc(e.conclusion)}</h3>
+
+    <div class="sec"><h4>Как получен вывод</h4><div class="note">${esc(e.method)}</div></div>
+
+    <div class="sec"><h4>Цепочка доказательств</h4>
+      ${e.steps.map((st,i)=>`<div class="step${st.inf?" inf":""}"><div class="n">Шаг ${i+1}</div>
+        <div class="txt">${esc(st.t)}</div>${(st.src||[]).map(srcHTML).join("")}</div>`).join("")}
+    </div>
+
+    ${e.checked?`<div class="sec"><h4>Что проверено</h4>
+      <div class="note" style="margin-bottom:6px">${esc(e.checked.scope)}. Порог совпадения: ${e.checked.threshold}. Ближайшие кандидаты:</div>
+      <table><tr><th>Кандидат</th><th>Пункт</th><th style="width:30%">Сходство</th><th></th></tr>
+      ${e.checked.cands.map(([n,p,v])=>`<tr><td>${esc(n)}</td><td>${esc(p)}</td>
+        <td><div class="bar"><span style="width:${v*100}%"></span></div></td><td class="s">${v.toFixed(2)}</td></tr>`).join("")}
+      </table></div>`:""}
+
+    ${e.npa?`<div class="sec"><h4>Нормативная база</h4><div class="note">${esc(e.npa)}</div></div>`:""}
+
+    <div class="sec"><h4>Уверенность</h4><span class="conf ${e.conf}">${confL}</span>
+      ${e.confNote?`<div class="note" style="margin-top:6px">${esc(e.confNote)}</div>`:""}</div>
+
+    <div class="sec"><h4>Проверка сотрудником</h4>
+      <div class="actions">
+        <button class="ok${review[id]==="ok"?" on":""}" data-r="ok">✓ Подтвердить</button>
+        <button class="no${review[id]==="no"?" on":""}" data-r="no">✕ Отклонить</button>
+      </div></div>
+
+    <div class="meta">Вывод носит рекомендательный характер и требует проверки ответственным сотрудником.</div>`;
+  $("#drawer").classList.add("open"); $("#scrim").classList.add("open");
+  $("#close").onclick=closeEv;
+  $("#drawer").querySelectorAll(".src").forEach(b=>b.onclick=()=>{ if(b.dataset.item){closeEv();flash(b.dataset.item)} });
+  $("#drawer").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{
+    review[id]=review[id]===b.dataset.r?undefined:b.dataset.r; render(); openEv(id);
+  });
+}
+function closeEv(){$("#drawer").classList.remove("open");$("#scrim").classList.remove("open")}
+function flash(id){
+  const el=document.getElementById(id); if(!el) return;
+  el.scrollIntoView({behavior:"smooth",block:"center"});
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+}
+$("#scrim").onclick=closeEv;
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeEv()});
+
+/* ---------- toggles ---------- */
+$("#fullBtn").onclick=()=>{const f=$("#full");f.classList.toggle("open");$("#fullBtn").textContent=f.classList.contains("open")?"Скрыть полную аналитику":"Показать полную аналитику";draw()};
+$("#tWord").onclick=()=>{$("#tWord").classList.add("on");$("#tVis").classList.remove("on");$("#word").hidden=false;$("#vis").hidden=true};
+$("#tVis").onclick=()=>{$("#tVis").classList.add("on");$("#tWord").classList.remove("on");$("#word").hidden=true;$("#vis").hidden=false;draw()};
+
+window.addEventListener("resize",draw);
+render();
+if(document.fonts) document.fonts.ready.then(draw);
+</script>
+</body>
+</html>
