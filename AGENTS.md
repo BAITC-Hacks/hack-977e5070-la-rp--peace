@@ -10,6 +10,7 @@ Read these before doing anything:
 |---|---|
 | [`.agents/guidelines.md`](.agents/guidelines.md) | Coding conventions, ruff/mypy rule set, validation commands |
 | [`.agents/git-workflow.md`](.agents/git-workflow.md) | Branching, PRs, conflict resolution, six-hour cadence |
+| [`.agents/frontend.md`](.agents/frontend.md) | Frontend scope, UI elements, Svelte stack + Svelte MCP, API contract |
 
 ## Setup
 
@@ -24,10 +25,10 @@ Shared files need a heads-up in team chat before changing them.
 
 | Area | Owner | Paths |
 |---|---|---|
-| TODO: fill in at kickoff | | |
+| Frontend (SvelteKit UI) | Sula | `frontend/`, `.agents/frontend.md` |
 | TODO | | |
 | TODO | | |
-| Shared (ask first) | everyone | `pyproject.toml`, `uv.lock`, shared models/interfaces |
+| Shared (ask first) | everyone | `pyproject.toml`, `uv.lock`, `.mcp.json`, shared models/interfaces, API contract (`.agents/frontend.md` §4) |
 
 ## Non-negotiables
 
