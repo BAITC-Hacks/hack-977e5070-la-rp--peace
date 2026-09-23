@@ -62,7 +62,8 @@ class _Tree:
         return lines
 
     def size(self, lines: list[BlockLine]) -> int:
-        return sum(len(line.path) + len(line.text) + 16 for line in lines)
+        """Exact length of the lines as ``Block.render`` shows them."""
+        return len(Block(0, tuple(lines)).render())
 
 
 def _split(tree: _Tree, node: DocumentNode, context: list[BlockLine], max_chars: int) -> list[Block]:

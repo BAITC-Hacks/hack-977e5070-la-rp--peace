@@ -156,6 +156,10 @@ CREATE TABLE entities (
     document_id INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,
     parent_id INTEGER,
     parent_status TEXT NOT NULL CHECK (parent_status IN ('resolved', 'root', 'unknown', 'ambiguous')),
+    -- JSON array of entity ids of this document offered as parents when parent_status = 'ambiguous'.
+    parent_candidates TEXT NOT NULL DEFAULT '[]' CHECK (
+        CASE WHEN json_valid(parent_candidates) THEN json_type(parent_candidates) = 'array' ELSE 0 END
+    ),
     name TEXT NOT NULL CHECK (trim(name) <> ''),
     -- JSON array of other names and abbreviations found in the document.
     aliases TEXT NOT NULL DEFAULT '[]' CHECK (

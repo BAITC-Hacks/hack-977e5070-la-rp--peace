@@ -105,6 +105,7 @@ class Entity(Base):
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
     parent_id: Mapped[int | None] = mapped_column(Integer)
     parent_status: Mapped[str] = mapped_column(Text)
+    parent_candidates: Mapped[str] = mapped_column(Text, default="[]")
     name: Mapped[str] = mapped_column(Text)
     aliases: Mapped[str] = mapped_column(Text, default="[]")
     entity_type: Mapped[str] = mapped_column(Text)
