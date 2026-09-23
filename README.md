@@ -130,6 +130,12 @@ uv run uvicorn la_rp_peace.api.app:create_app --factory --reload   # :8000, /doc
 cd frontend && corepack enable pnpm && pnpm install && pnpm dev    # :5173
 ```
 
+Или одной командой — соберёт интерфейс и отдаст его вместе с API на :8000:
+
+```bash
+uv run python -m la_rp_peace.serve
+```
+
 Принимаются Word, PDF, Excel. База — `data/larp.sqlite3`. Контрольные документы —
 [`test_data/`](test_data/), снимок базы с разобранными документами — [`snapshots/`](snapshots/).
 
