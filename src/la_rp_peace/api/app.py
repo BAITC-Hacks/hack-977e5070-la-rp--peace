@@ -82,11 +82,15 @@ def create_app(settings: Settings | None = None, model: ChatModel | None = None)
     configure_logging(settings.log_level)
     engine = make_engine(settings.database_url)
     session_factory = sessionmaker(engine, expire_on_commit=False)
+    injected = model
     model = model or _default_model(settings)
+    # Stage 1 runs with its own reasoning effort; injected models (tests) are used as they are.
+    profile_settings = settings.model_copy(update={"openai_reasoning_effort": settings.profile_reasoning_effort})
+    parse_model = (_default_model(profile_settings) if injected is None else None) or model
     queue = (
         ParsingQueue(
             session_factory,
-            model,
+            parse_model or model,
             max_chars=settings.profile_max_chars,
             retries=settings.profile_retries,
             workers=settings.parser_workers,
