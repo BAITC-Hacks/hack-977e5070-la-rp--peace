@@ -26,6 +26,8 @@ class Settings(BaseSettings):
         entity_block_max_chars: Size limit of one stage 2 block shown to the model; larger
             sections are split at child boundaries.
         entity_retries: Corrected stage 2 answers requested after the first, per call.
+        activity_block_max_chars: Size limit of one stage 3 block shown to the model.
+        activity_retries: Corrected stage 3 answers requested per block after the first.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -43,6 +45,8 @@ class Settings(BaseSettings):
     parser_workers: int = Field(default=2, ge=1)
     entity_block_max_chars: int = Field(default=12_000, ge=1_000)
     entity_retries: int = Field(default=2, ge=0)
+    activity_block_max_chars: int = Field(default=12_000, ge=1_000)
+    activity_retries: int = Field(default=2, ge=0)
 
     @field_validator("openai_reasoning_effort", mode="before")
     @classmethod

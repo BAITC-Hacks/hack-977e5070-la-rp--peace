@@ -128,3 +128,54 @@ class EntityIssueType(StrEnum):
     BLOCK_FAILED = "block_failed"
     CYCLE = "cycle"
     OTHER = "other"
+
+
+class ActivitiesStatus(StrEnum):
+    """Progress of stage 3 (activities) for a document."""
+
+    NOT_STARTED = "not_started"
+    RUNNING = "running"
+    DONE = "done"
+    NEEDS_REVIEW = "needs_review"
+    FAILED = "failed"
+
+
+class ActivityType(StrEnum):
+    """Kind of provision assigned to an entity, judged by meaning, not by section title."""
+
+    GOAL = "goal"
+    TASK = "task"
+    FUNCTION = "function"
+    DUTY = "duty"
+    RIGHT = "right"
+    PROHIBITION = "prohibition"
+    OTHER = "other"
+
+
+class Participation(StrEnum):
+    """How the participants of one provision share it (each keeps a record of their own)."""
+
+    INDIVIDUAL = "individual"
+    EACH = "each"
+    JOINT = "joint"
+    ALTERNATIVE = "alternative"
+    UNCLEAR = "unclear"
+
+
+class Specificity(StrEnum):
+    """Whether a record's content is disclosed; does not replace its type."""
+
+    SPECIFIC = "specific"
+    GENERALIZED = "generalized"
+    NEEDS_CLARIFICATION = "needs_clarification"
+
+
+class ActivityIssueType(StrEnum):
+    """Kinds of stage 3 problems."""
+
+    UNCLEAR_TYPE = "unclear_type"
+    UNRESOLVED_ENTITY = "unresolved_entity"
+    UNCLEAR_PARTICIPATION = "unclear_participation"
+    UNCLEAR = "unclear"
+    BLOCK_FAILED = "block_failed"
+    OTHER = "other"

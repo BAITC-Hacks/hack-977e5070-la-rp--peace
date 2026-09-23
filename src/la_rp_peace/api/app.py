@@ -10,7 +10,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import sessionmaker
 
-from la_rp_peace.api import documents, entities, sources
+from la_rp_peace.activities.pipeline import ActivityStage
+from la_rp_peace.api import activities, documents, entities, sources
 from la_rp_peace.config import Settings, get_settings
 from la_rp_peace.db import make_engine
 from la_rp_peace.entities.pipeline import EntityStage
@@ -37,7 +38,10 @@ def _default_model(settings: Settings) -> ChatModel | None:
 
 def _post_parse_stages(settings: Settings, model: ChatModel) -> list[PostParseStage]:
     """Stages chained after stage 1, in order; each later stage builds on the earlier ones."""
-    return [EntityStage(model, settings.entity_block_max_chars, settings.entity_retries)]
+    return [
+        EntityStage(model, settings.entity_block_max_chars, settings.entity_retries),
+        ActivityStage(model, max_chars=settings.activity_block_max_chars, retries=settings.activity_retries),
+    ]
 
 
 def create_app(settings: Settings | None = None, model: ChatModel | None = None) -> FastAPI:
@@ -92,6 +96,7 @@ def create_app(settings: Settings | None = None, model: ChatModel | None = None)
     app.include_router(documents.router)
     app.include_router(sources.router)
     app.include_router(entities.router)
+    app.include_router(activities.router)
 
     @app.get("/api/health", tags=["meta"])
     def health() -> dict[str, str]:

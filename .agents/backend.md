@@ -192,6 +192,56 @@ rendered with python-docx. PDF is the frontend's print stylesheet, not a backend
 Regulatory and benchmark documents are already accepted (`set=regulatory|benchmark`); their
 comparison stages come from the methodology.
 
+### 7. Activities (methodology stage 3) — **done**
+
+`src/la_rp_peace/activities/`: `ActivityStage` (`name = "activities"`) is a post-parse stage
+after entities. It reads the tree and the stage 2 registry **from the database only** and runs
+when `entities_status` is `done`/`needs_review`; otherwise `activities_status` stays
+`not_started` (and stale stage 3 rows are removed).
+
+1. Blocks = `entities.blocks.plan_blocks` (same sections, splitting, context lines, TOC and page
+   numbers left out), `ACTIVITY_BLOCK_MAX_CHARS` (12000). One request per block, sequentially.
+2. The model sees the rules (`prompt.py`), the document card, the registry as `E<entity_id> |
+   name | тип | также | родитель | роли` and the block. It answers **provisions** `{type,
+   type_unclear, formulation, specificity specific|generalized|needs_clarification, condition,
+   deadline, periodicity, participation individual|each|joint|alternative|unclear,
+   participant_designation, participants[], sources[], notes[]}`; a participant is `{entity:
+   "E<n>" | null, designation, group, condition, note, sources[]}`; a source is `{node_id, quote,
+   supports[]}`.
+3. `verify.py` checks every answer and **expands each provision into one record per
+   participant** (one record = one entity; identical wording at different entities stays
+   separate): node ids and quotes of this document (`SourceVerifier`, quotes must contain words),
+   registry keys, supports for formulation, type, every filled condition/deadline/periodicity,
+   non-individual participation and non-specific specificity; `entity` support per participant,
+   `membership` support when included through a `group`; designation + note for `entity: null`
+   (unresolved role or undisclosed group remainder); individual = 1 participant, each/joint/
+   alternative ≥ 2; the formulation must rest on a non-context line of the block. Each record gets
+   the shared sources plus its participant's own, the provision condition joined with the
+   participant's condition, and `participant_entity_ids` = the other known participants. Errors
+   go back to the model (`ACTIVITY_RETRIES`, default 2); the best attempt keeps only provisions
+   that passed. A model error or exhausted retries ⇒ block `failed` (never `none`) + blocking
+   `block_failed` issue.
+4. `checks.py`: a record is `needs_review` with an unresolved participant (`unresolved_entity`),
+   unclear participation, unclear type, specificity `needs_clarification` or a model note,
+   otherwise `checked`. Document: `done`, or `needs_review` with failed/unclear blocks or stored
+   records needing review. A crash ⇒ `failed` + blocking issue.
+5. `store.py` — re-runs replace, not add (methodology §6), in one transaction: a block's verified
+   result replaces the block's previous records; records matching by `block_node_id + entity_id +
+   record_type + normalised formulation` keep their ids, unmatched previous records are deleted.
+   A failed block keeps its previous records and gets a `block_failed` issue saying the update
+   failed. Records of blocks no longer planned are deleted; block marks and block issues describe
+   the latest run.
+
+Tables: `activity_records` (`block_node_id`, `entity_id` NULL ⇒ `note` required, `designation`,
+`participation`, `participant_designation`, `participant_entity_ids` JSON, `specificity`, …),
+`activity_sources` (per record), `activity_blocks`, `activity_issues`, column
+`documents.activities_status`; composite `(document_id, id)` keys keep everything in one document.
+
+Endpoints: `GET /api/documents/{id}/activities` (flat records with entity name, participation,
+other participants with names, sources `{node_id, path, location, quote, start, end, supports}`),
+`GET /api/documents/{id}/activity-report` (status, record count, block marks, issues),
+`POST /api/documents/{id}/activities` → 202, re-runs stage 3 and later stages (503 without a model).
+
 ## Not doing
 
 Auth, multi-tenancy, migrations, OCR, background workers outside the API process,
