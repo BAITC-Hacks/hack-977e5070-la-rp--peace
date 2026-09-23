@@ -52,7 +52,9 @@ def start_comparison(request: Request, session: SessionDep, settings: SettingsDe
     embedder = request.app.state.embedder
     model = request.app.state.chat_model
     if queue is None or embedder is None or model is None:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Сравнение недоступно: не заданы OPENAI_API_KEY и OPENAI_MODEL")
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Сравнение недоступно: не заданы OPENAI_API_KEY и OPENAI_MODEL"
+        )
     for document_id in [*body.before_ids, *body.after_ids]:
         if session.get(Document, document_id) is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"Документ {document_id} не найден")

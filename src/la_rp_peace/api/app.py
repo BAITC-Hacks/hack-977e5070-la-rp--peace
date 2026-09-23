@@ -5,9 +5,11 @@ Run with ``uv run uvicorn la_rp_peace.api.app:create_app --factory --reload``.
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import sessionmaker
 
 from la_rp_peace.activities.pipeline import ActivityStage
@@ -129,4 +131,25 @@ def create_app(settings: Settings | None = None, model: ChatModel | None = None)
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    _mount_ui(app, UI_BUILD_DIR)
     return app
+
+
+# Built SvelteKit SPA (`pnpm build` in frontend/); served on the API's own port when present.
+UI_BUILD_DIR = Path(__file__).resolve().parents[3] / "frontend" / "build"
+
+
+def _mount_ui(app: FastAPI, build_dir: Path) -> None:
+    """Serve the built UI: real files as they are, every other non-API path gets the SPA shell."""
+    if not (build_dir / "200.html").is_file():
+        return
+    root = build_dir.resolve()
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def ui(path: str) -> FileResponse:
+        if path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Не найдено")
+        file = (root / path).resolve()
+        if path and file.is_file() and file.is_relative_to(root):
+            return FileResponse(file)
+        return FileResponse(root / "200.html")

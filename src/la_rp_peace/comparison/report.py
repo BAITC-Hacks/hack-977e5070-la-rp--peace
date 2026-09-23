@@ -46,7 +46,9 @@ class Report:
         return finding_id
 
 
-def _evidence(conclusion: str, method: str, steps: list[dict[str, Any]], confidence: str, **extra: Any) -> dict[str, Any]:
+def _evidence(
+    conclusion: str, method: str, steps: list[dict[str, Any]], confidence: str, **extra: Any
+) -> dict[str, Any]:
     return {"conclusion": conclusion, "method": method, "steps": steps, "confidence": confidence, **extra}
 
 
@@ -80,15 +82,26 @@ def entity_findings(report: Report, before: Side, after: Side, pairs: dict[int, 
         report.item(UNITS, "before", item, entity.name, status, f"entity:{entity.id}")
         report.item(UNITS, "after", f"a_e{target.id}", target.name, status, f"entity:{target.id}")
         if changes:
-            report.add(UNITS, {
-                "type": "transformed", "title": f"Изменено: {entity.name}", "desc": "; ".join(changes),
-                "from": [item], "to": [f"a_e{target.id}"],
-                "evidence": _evidence(
-                    "Объект сохранился с изменениями: " + "; ".join(changes), "Совпадение названия/сокращения или сходство описаний",
-                    [_inference(f"Сопоставление по {'названию' if match[1] >= 0.999 else f'сходству {match[1]:.2f}'}")],
-                    "high" if match[1] >= 0.999 else "medium",
-                ),
-            })
+            report.add(
+                UNITS,
+                {
+                    "type": "transformed",
+                    "title": f"Изменено: {entity.name}",
+                    "desc": "; ".join(changes),
+                    "from": [item],
+                    "to": [f"a_e{target.id}"],
+                    "evidence": _evidence(
+                        "Объект сохранился с изменениями: " + "; ".join(changes),
+                        "Совпадение названия/сокращения или сходство описаний",
+                        [
+                            _inference(
+                                f"Сопоставление по {'названию' if match[1] >= 0.999 else f'сходству {match[1]:.2f}'}"
+                            )
+                        ],
+                        "high" if match[1] >= 0.999 else "medium",
+                    ),
+                },
+            )
     for entity in after.entities.values():
         if entity.id not in matched_after:
             _only_one_side(report, after, entity, f"a_e{entity.id}", "created")
@@ -98,18 +111,23 @@ def _only_one_side(report: Report, side: Side, entity: Entity, item: str, kind: 
     column = "before" if side.name == "before" else "after"
     report.item(UNITS, column, item, entity.name, kind, f"entity:{entity.id}")
     where = "«после»" if kind == "abolished" else "«до»"
-    report.add(UNITS, {
-        "type": kind,
-        "title": ("Только в «до»: " if kind == "abolished" else "Только в «после»: ") + entity.name,
-        "desc": f"В документах {where} соответствующий объект не найден; создание или упразднение требует подтверждения.",
-        "from": [item] if kind == "abolished" else [], "to": [item] if kind == "created" else [],
-        "evidence": _evidence(
-            f"Изменение представленного состава: объект найден только в одной редакции ({side.name}).",
-            "Сопоставление названий, сокращений и описаний объектов обеих сторон",
-            [_inference(f"{entity.name} ({entity.category})")], "medium",
-            checked={"scope": f"Все объекты документов {where}", "threshold": 0.8, "candidates": []},
-        ),
-    })
+    report.add(
+        UNITS,
+        {
+            "type": kind,
+            "title": ("Только в «до»: " if kind == "abolished" else "Только в «после»: ") + entity.name,
+            "desc": f"В документах {where} соответствующий объект не найден; создание или упразднение требует подтверждения.",
+            "from": [item] if kind == "abolished" else [],
+            "to": [item] if kind == "created" else [],
+            "evidence": _evidence(
+                f"Изменение представленного состава: объект найден только в одной редакции ({side.name}).",
+                "Сопоставление названий, сокращений и описаний объектов обеих сторон",
+                [_inference(f"{entity.name} ({entity.category})")],
+                "medium",
+                checked={"scope": f"Все объекты документов {where}", "threshold": 0.8, "candidates": []},
+            ),
+        },
+    )
 
 
 # --- activities ------------------------------------------------------------------------------
@@ -123,7 +141,9 @@ def _item(report: Report, title: str, side: Side, record: ActivityRecord, status
     prefix = "b" if side.name == "before" else "a"
     item = f"{prefix}_r{record.id}"
     column = "before" if side.name == "before" else "after"
-    report.item(title, column, item, f"{side.owner(record)}: {_short(record.formulation)}", status, f"record:{record.id}")
+    report.item(
+        title, column, item, f"{side.owner(record)}: {_short(record.formulation)}", status, f"record:{record.id}"
+    )
     return item
 
 
@@ -151,24 +171,45 @@ def activity_findings(
         if full and not changes:
             report.kept += 1
             continue
-        _changed(report, title, before, after, record, [(by_id[int(ref[1:])], match) for ref, match in accepted], outcome, changes)
+        _changed(
+            report,
+            title,
+            before,
+            after,
+            record,
+            [(by_id[int(ref[1:])], match) for ref, match in accepted],
+            outcome,
+            changes,
+        )
     return matched_after
 
 
 def _accepted(outcome: Outcome | None) -> list[tuple[str, dict[str, Any]]]:
     if outcome is None or outcome.answer is None:
         return []
-    return [(m["candidate"], m) for m in outcome.answer.get("matches", []) if m.get("verdict") in ("matches", "partial")]
+    return [
+        (m["candidate"], m) for m in outcome.answer.get("matches", []) if m.get("verdict") in ("matches", "partial")
+    ]
 
 
 def _needs_review(report: Report, title: str, before: Side, record: ActivityRecord, reason: str) -> None:
     item = _item(report, title, before, record, None)
-    report.add(title, {
-        "type": "loss", "title": f"Требует проверки: {_short(record.formulation, 70)}", "desc": reason,
-        "from": [item], "to": [],
-        "evidence": _evidence("Проверка соответствия не завершена — это не установленная потеря.", "Проверка ИИ не выполнена",
-                              [_fact("До", record_sources(before, title, record, item))], "low"),
-    })
+    report.add(
+        title,
+        {
+            "type": "loss",
+            "title": f"Требует проверки: {_short(record.formulation, 70)}",
+            "desc": reason,
+            "from": [item],
+            "to": [],
+            "evidence": _evidence(
+                "Проверка соответствия не завершена — это не установленная потеря.",
+                "Проверка ИИ не выполнена",
+                [_fact("До", record_sources(before, title, record, item))],
+                "low",
+            ),
+        },
+    )
 
 
 def _loss(report: Report, title: str, before: Side, record: ActivityRecord, item: Candidates) -> None:
@@ -177,21 +218,38 @@ def _loss(report: Report, title: str, before: Side, record: ActivityRecord, item
         {"label": _short(candidate.formulation, 80), "clause": "", "score": round(score, 3), "item": None}
         for candidate, score in item.checked
     ]
-    report.add(title, {
-        "type": "loss", "title": f"Возможная потеря: {_short(record.formulation, 70)}",
-        "desc": f"Было закреплено за «{before.owner(record)}».", "from": [item_id], "to": [],
-        "evidence": _evidence(
-            "В предоставленных документах «после» закрепление функции не найдено — возможная потеря.",
-            "Поиск по всем записям «после»: одинаковый текст и эмбеддинги, кандидаты проверены ИИ",
-            [_fact(f"До: {before.owner(record)}", record_sources(before, title, record, item_id))], "medium",
-            checked={"scope": "Все записи деятельности документов «после»", "threshold": 0.75, "candidates": candidates},
-        ),
-    })
+    report.add(
+        title,
+        {
+            "type": "loss",
+            "title": f"Возможная потеря: {_short(record.formulation, 70)}",
+            "desc": f"Было закреплено за «{before.owner(record)}».",
+            "from": [item_id],
+            "to": [],
+            "evidence": _evidence(
+                "В предоставленных документах «после» закрепление функции не найдено — возможная потеря.",
+                "Поиск по всем записям «после»: одинаковый текст и эмбеддинги, кандидаты проверены ИИ",
+                [_fact(f"До: {before.owner(record)}", record_sources(before, title, record, item_id))],
+                "medium",
+                checked={
+                    "scope": "Все записи деятельности документов «после»",
+                    "threshold": 0.75,
+                    "candidates": candidates,
+                },
+            ),
+        },
+    )
 
 
 def _changed(
-    report: Report, title: str, before: Side, after: Side, record: ActivityRecord,
-    targets: list[tuple[ActivityRecord, dict[str, Any]]], outcome: Outcome | None, changes: list[str],
+    report: Report,
+    title: str,
+    before: Side,
+    after: Side,
+    record: ActivityRecord,
+    targets: list[tuple[ActivityRecord, dict[str, Any]]],
+    outcome: Outcome | None,
+    changes: list[str],
 ) -> None:
     moved = "executor" in changes
     kind = "moved" if moved else "transformed"
@@ -205,16 +263,26 @@ def _changed(
         steps.append(_inference(explanation))
     owners = ", ".join(dict.fromkeys(after.owner(t) for t, _ in targets))
     labels = ", ".join(CHANGE_LABELS[c] for c in changes) or "частичное покрытие"
-    report.add(title, {
-        "type": kind,
-        "title": (f"Передано: {before.owner(record)} → {owners}" if moved else f"Изменено ({labels}): {_short(record.formulation, 60)}"),
-        "desc": f"Изменения: {labels}." + (f" Без продолжения: {unmatched}" if unmatched else ""),
-        "from": [item], "to": to,
-        "evidence": _evidence(
-            f"Деятельность сохранилась; изменилось: {labels}.", "Кандидаты по эмбеддингам, проверка ИИ по цитатам", steps,
-            "high" if outcome and outcome.answer and outcome.answer.get("coverage") == "full" else "medium",
-        ),
-    })
+    report.add(
+        title,
+        {
+            "type": kind,
+            "title": (
+                f"Передано: {before.owner(record)} → {owners}"
+                if moved
+                else f"Изменено ({labels}): {_short(record.formulation, 60)}"
+            ),
+            "desc": f"Изменения: {labels}." + (f" Без продолжения: {unmatched}" if unmatched else ""),
+            "from": [item],
+            "to": to,
+            "evidence": _evidence(
+                f"Деятельность сохранилась; изменилось: {labels}.",
+                "Кандидаты по эмбеддингам, проверка ИИ по цитатам",
+                steps,
+                "high" if outcome and outcome.answer and outcome.answer.get("coverage") == "full" else "medium",
+            ),
+        },
+    )
 
 
 def created_findings(report: Report, after: Side, matched_after: set[int]) -> None:
@@ -224,15 +292,23 @@ def created_findings(report: Report, after: Side, matched_after: set[int]) -> No
             continue
         title = _block_for(after, record)
         item = _item(report, title, after, record, "created")
-        report.add(title, {
-            "type": "created", "title": f"Новая деятельность: {_short(record.formulation, 70)}",
-            "desc": f"Закреплено за «{after.owner(record)}».", "from": [], "to": [item],
-            "evidence": _evidence(
-                "В документах «после» описана деятельность без найденного соответствия в «до».",
-                "Ни одна запись «до» не была сопоставлена с этой записью", [_fact("После", record_sources(after, title, record, item))],
-                "medium", checked={"scope": "Все записи деятельности документов «до»", "threshold": 0.75, "candidates": []},
-            ),
-        })
+        report.add(
+            title,
+            {
+                "type": "created",
+                "title": f"Новая деятельность: {_short(record.formulation, 70)}",
+                "desc": f"Закреплено за «{after.owner(record)}».",
+                "from": [],
+                "to": [item],
+                "evidence": _evidence(
+                    "В документах «после» описана деятельность без найденного соответствия в «до».",
+                    "Ни одна запись «до» не была сопоставлена с этой записью",
+                    [_fact("После", record_sources(after, title, record, item))],
+                    "medium",
+                    checked={"scope": "Все записи деятельности документов «до»", "threshold": 0.75, "candidates": []},
+                ),
+            },
+        )
 
 
 def duplication_findings(session: Session, report: Report, after: Side) -> None:
@@ -248,11 +324,22 @@ def duplication_findings(session: Session, report: Report, after: Side) -> None:
             steps = [_fact(after.owner(r), record_sources(after, DUPLICATION, r, f"a_r{r.id}")) for r in sides]
             if pair.explanation:
                 steps.append(_inference(pair.explanation))
-            report.add(DUPLICATION, {
-                "type": "duplication", "title": "Возможное дублирование функций", "desc": _short(pair.explanation or "", 200),
-                "from": [], "to": to,
-                "evidence": _evidence("Функции разных объектов пересекаются (этап 4.1).", "Эмбеддинги > 0,75 и проверка ИИ", steps, "medium"),
-            })
+            report.add(
+                DUPLICATION,
+                {
+                    "type": "duplication",
+                    "title": "Возможное дублирование функций",
+                    "desc": _short(pair.explanation or "", 200),
+                    "from": [],
+                    "to": to,
+                    "evidence": _evidence(
+                        "Функции разных объектов пересекаются (этап 4.1).",
+                        "Эмбеддинги > 0,75 и проверка ИИ",
+                        steps,
+                        "medium",
+                    ),
+                },
+            )
 
 
 def job_result(job_id: str, report: Report, before: Side, after: Side) -> dict[str, Any]:
@@ -262,7 +349,9 @@ def job_result(job_id: str, report: Report, before: Side, after: Side) -> dict[s
         counts[finding["type"]] = counts.get(finding["type"], 0) + 1
     blocks = [block for block in report.blocks.values() if block["changes"]]
     names = lambda side: ", ".join(d.title or d.file_name for d in side.documents)  # noqa: E731
-    top = [f"{f['title']} ({fid})" for fid, f in report.findings.items() if f["type"] in ("loss", "moved", "duplication")][:6]
+    top = [
+        f"{f['title']} ({fid})" for fid, f in report.findings.items() if f["type"] in ("loss", "moved", "duplication")
+    ][:6]
     conclusion = (
         f"Сравнение «{names(before)}» (до) и «{names(after)}» (после). "
         + "; ".join(f"{k}: {v}" for k, v in sorted(counts.items()))
@@ -277,4 +366,3 @@ def job_result(job_id: str, report: Report, before: Side, after: Side) -> dict[s
         "blocks": blocks,
         "findings": report.findings,
     }
-

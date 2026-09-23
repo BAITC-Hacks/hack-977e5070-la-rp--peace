@@ -22,6 +22,8 @@ Run:
 
 ```bash
 uv run uvicorn la_rp_peace.api.app:create_app --factory --reload   # http://localhost:8000/docs
+uv run python -m la_rp_peace.serve   # whole app: builds frontend/ (Node 20+), serves UI + API on http://localhost:8000
+uv run python -m la_rp_peace.serve --no-build   # same, reusing the last UI build
 ```
 
 Config (env or `.env`, see `.env.example`): `DATABASE_URL`, `MAX_UPLOAD_MB`, `CORS_ORIGINS`,
