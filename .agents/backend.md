@@ -26,7 +26,8 @@ uv run uvicorn la_rp_peace.api.app:create_app --factory --reload   # http://loca
 
 Config (env or `.env`, see `.env.example`): `DATABASE_URL`, `MAX_UPLOAD_MB`, `CORS_ORIGINS`,
 `LOG_LEVEL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`, `OPENAI_REASONING_EFFORT` (default `low`), `PROFILE_MAX_CHARS`,
-`PROFILE_RETRIES`, `PARSER_WORKERS`. Without the key and model, uploads return 503.
+`PROFILE_RETRIES`, `PARSER_WORKERS`, `ENTITY_BLOCK_MAX_CHARS` (12000), `ENTITY_RETRIES` (2).
+Without the key and model, uploads return 503.
 
 ## Layout
 
@@ -45,8 +46,17 @@ src/la_rp_peace/
     checks.py     methodology §8 checks -> parsing_issues
     metadata.py   card fields verified against quotes -> metadata_evidence
     analysis.py   answer -> checks -> feedback to the model, up to PROFILE_RETRIES
-    pipeline.py   register upload, background parsing, one-transaction save
-  api/            app.py (factory), documents.py, sources.py, schemas.py, deps.py
+    pipeline.py   register upload, background parsing, one-transaction save, post-parse stages
+  llm.py          ChatModel protocol + OpenAIChatModel (JSON mode), shared by all stages
+  entities/       stage 2 (organisational entities), see below
+    blocks.py     tree -> blocks (section or split at child boundaries, ancestors as context)
+    prompt.py     methodology rules, block and whole-document review messages
+    answers.py    pydantic shapes of the model's answers
+    verify.py     quotes in nodes of THIS document, supports vocabulary, refs, statuses
+    conversation.py  answer -> checks -> feedback, up to ENTITY_RETRIES
+    registry.py   per-document registry E<n>: upserts, ambiguous parents, cycle refusal, merges
+    extract.py, consolidate.py, checks.py (methodology §8), pipeline.py (EntityStage, save)
+  api/            app.py (factory), documents.py, entities.py, sources.py, schemas.py, deps.py
   analysis/       Marinadec — comparison stages (not yet present)
 ```
 
@@ -71,6 +81,29 @@ On the control documents, DOCX and the Word-exported PDFs in `test_data/converte
 identical trees (tests enforce it): 14 sections, glued 3.10–3.12 and `10.Контроль качества`
 split out, two separate lists in 9.3, TOC and approval stamp as `service`, `5.5.3. ;` of
 ed. 8 reported as `empty_content`.
+
+## Entity extraction (methodology stage 2)
+
+Chained automatically after stage 1 (`EntityStage`, name `entities`); `documents.entities_status`
+goes `not_started → running → done | needs_review | failed`. Each document is processed alone.
+
+1. `plan_blocks` turns the tree into blocks: front matter (approval stamp, title), then one
+   block per section; sections above `ENTITY_BLOCK_MAX_CHARS` are split at child boundaries,
+   each part carrying its ancestors' headings/intro texts as `(контекст)` lines. TOC lines and
+   page numbers are dropped. Lines are `[node <id>] <path> | <text>`.
+2. Blocks are read in order. The model sees the card, the registry so far (`E<n>: name …`)
+   and the block, and answers mentions (`E<n>` = known object, other refs = new), parents
+   with status, relations (functional subordination, reports_to, … — never the parent) and
+   unclear cases. Every claim needs a source `{node_id, quote, supports}`; quotes must be
+   verbatim in a node of this document. Problems go back to the model; after
+   `ENTITY_RETRIES` or on a request error the block is `failed` (never `none`) + blocking issue.
+3. A whole-document review merges duplicates only with a `same_entity` source and settles
+   parents with evidence. Equal names never merge by themselves; a second, different parent
+   makes the parent `ambiguous` (candidates kept in `entities.parent_candidates`); cycles are refused.
+4. Final checks (§8): parents exist, no cycles, name sources present, root/resolved without a
+   `parent` source falls back to `unknown`. Entities with an open issue get `needs_review`,
+   the others `checked`; the document is `needs_review` if any issue is blocking or a block
+   failed, else `done`. One transaction replaces all stage 2 rows of the document.
 
 ## Traceability contract (every conclusion -> exact words)
 
@@ -105,6 +138,14 @@ quote check backs the metadata card: every card value has quotes in `metadata_ev
 Endpoints: `POST/GET /api/documents`, `GET/PATCH/DELETE /api/documents/{id}`,
 `GET /api/documents/{id}/nodes|issues|profile|file`, `GET /api/nodes/{id}`,
 `POST /api/sources/resolve`, `GET /api/health`.
+
+### 1b. Organisational entities (stage 2) — **done**
+
+`GET /api/documents/{id}/entities` (parent, status, candidates, aliases, roles, review status,
+sources `{node_id, path, location, quote, start, end, supports}`),
+`GET /api/documents/{id}/entity-relations`, `GET /api/documents/{id}/entity-report` (block marks,
+issues, `entities_status`), `POST /api/documents/{id}/entities` → 202, re-runs stage 2 and the
+stages after it (409 without a tree, 503 without a model). `DocumentOut` carries `entities_status`.
 
 ### 2. Analyses and live progress
 
